@@ -1,0 +1,5 @@
+/.direnv
+/node_modules
+/build
+package-lock.json
+/.vscode
