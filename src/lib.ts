@@ -19,6 +19,10 @@ export function add(lhs: any, rhs: any): any {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.value + rhs.value);
     }
+    return lhs.value + rhs;
+  }
+  if (rhs instanceof NixInt) {
+    return lhs + rhs.value;
   }
   return lhs + rhs;
 }
@@ -28,6 +32,10 @@ export function sub(lhs: any, rhs: any): any {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.value - rhs.value);
     }
+    return lhs.value - rhs;
+  }
+  if (rhs instanceof NixInt) {
+    return lhs - rhs.value;
   }
   return lhs - rhs;
 }
@@ -37,6 +45,10 @@ export function mul(lhs: any, rhs: any): any {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.value * rhs.value);
     }
+    return lhs.value * rhs;
+  }
+  if (rhs instanceof NixInt) {
+    return lhs * rhs.value;
   }
   return lhs * rhs;
 }
@@ -46,6 +58,10 @@ export function div(lhs: any, rhs: any): any {
     if (rhs instanceof NixInt) {
       return new NixInt(Math.floor(lhs.value / rhs.value));
     }
+    return lhs.value / rhs;
+  }
+  if (rhs instanceof NixInt) {
+    return lhs / rhs.value;
   }
   return lhs / rhs;
 }
