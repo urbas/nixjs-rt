@@ -5,6 +5,7 @@
   "main": "src/lib.js",
   "scripts": {
     "build": "tsc -p .",
+    "build-local": "tsc -w -p . --outDir build",
     "fmt": "prettier --write .",
     "fmt-check": "prettier --check .",
     "test": "jest --color",
