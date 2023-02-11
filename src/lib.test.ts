@@ -66,6 +66,18 @@ test("divides a NixInt and a float", () => {
   expect(nixrt.div(5.0, new NixInt(2))).toBe(2.5);
 });
 
-test("multiplying strings raises an exception", () => {
+test("multiplying non-numbers raises an exception", () => {
   expect(() => nixrt.mul("foo", "bar")).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.mul("foo", 1.5)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.mul("foo", new NixInt(1))).toThrow(
+    nixrt.EvaluationException
+  );
+});
+
+test("dividing non-numbers raises an exception", () => {
+  expect(() => nixrt.div("foo", "bar")).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.div("foo", 1.5)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.div("foo", new NixInt(1))).toThrow(
+    nixrt.EvaluationException
+  );
 });
