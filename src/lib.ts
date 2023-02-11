@@ -50,6 +50,11 @@ export function sub(lhs: any, rhs: any): any {
 }
 
 export function mul(lhs: any, rhs: any): any {
+  if (!isNixNumber(lhs) || !isNixNumber(rhs)) {
+    throw new EvaluationException(
+      `Cannot multiply '${typeof lhs}' and '${typeof rhs}'.`
+    );
+  }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.value * rhs.value);
@@ -59,15 +64,15 @@ export function mul(lhs: any, rhs: any): any {
   if (rhs instanceof NixInt) {
     return lhs * rhs.value;
   }
-  if (typeof lhs !== "number" || typeof rhs !== "number") {
-    throw new EvaluationException(
-      `Cannot multiply '${typeof lhs}' and '${typeof lhs}'.`
-    );
-  }
   return lhs * rhs;
 }
 
 export function div(lhs: any, rhs: any): any {
+  if (!isNixNumber(lhs) || !isNixNumber(rhs)) {
+    throw new EvaluationException(
+      `Cannot divide '${typeof lhs}' and '${typeof rhs}'.`
+    );
+  }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return new NixInt(Math.floor(lhs.value / rhs.value));
@@ -78,6 +83,10 @@ export function div(lhs: any, rhs: any): any {
     return lhs / rhs.value;
   }
   return lhs / rhs;
+}
+
+function isNixNumber(object: any): boolean {
+  return typeof object === "number" || object instanceof NixInt;
 }
 
 export default {
