@@ -1,3 +1,4 @@
+// Types:
 export class NixInt {
   value: number;
 
@@ -37,6 +38,11 @@ export function add(lhs: any, rhs: any): any {
 }
 
 export function sub(lhs: any, rhs: any): any {
+  if (!isNumber(lhs) || !isNumber(lhs)) {
+    throw new EvaluationException(
+      `Cannot subtract '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+    );
+  }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.value - rhs.value);
@@ -50,9 +56,9 @@ export function sub(lhs: any, rhs: any): any {
 }
 
 export function mul(lhs: any, rhs: any): any {
-  if (!isNixNumber(lhs) || !isNixNumber(rhs)) {
+  if (!isNumber(lhs) || !isNumber(rhs)) {
     throw new EvaluationException(
-      `Cannot multiply '${typeof lhs}' and '${typeof rhs}'.`
+      `Cannot multiply '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
   if (lhs instanceof NixInt) {
@@ -68,9 +74,9 @@ export function mul(lhs: any, rhs: any): any {
 }
 
 export function div(lhs: any, rhs: any): any {
-  if (!isNixNumber(lhs) || !isNixNumber(rhs)) {
+  if (!isNumber(lhs) || !isNumber(rhs)) {
     throw new EvaluationException(
-      `Cannot divide '${typeof lhs}' and '${typeof rhs}'.`
+      `Cannot divide '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
   if (lhs instanceof NixInt) {
@@ -85,16 +91,44 @@ export function div(lhs: any, rhs: any): any {
   return lhs / rhs;
 }
 
-function isNixNumber(object: any): boolean {
+// Type functions:
+export function typeOf(object: any): string {
+  if (object === null) {
+    return "null";
+  }
+  if (object instanceof NixInt) {
+    return "int";
+  }
+  if (Array.isArray(object)) {
+    return "list";
+  }
+  const object_type = typeof object;
+  switch (object_type) {
+    case "boolean":
+      return "bool";
+    case "number":
+      return "float";
+    default:
+      return object_type;
+  }
+}
+
+function isNumber(object: any): boolean {
   return typeof object === "number" || object instanceof NixInt;
 }
 
 export default {
+  // Types:
+  EvaluationException,
+  NixInt,
+
+  // Arithmetic:
   add,
   div,
-  EvaluationException,
   mul,
   neg,
-  NixInt,
   sub,
+
+  // Type functions:
+  typeOf,
 };
