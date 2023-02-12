@@ -1,6 +1,7 @@
 import { expect, test } from "@jest/globals";
 import nixrt, { NixInt } from "./lib";
 
+// Arithmetic:
 test("negative NixInt(1) equals to NixInt(-1)", () => {
   const result = nixrt.neg(new NixInt(1)) as NixInt;
   expect(result.value).toBe(-1);
@@ -87,6 +88,46 @@ test("dividing non-numbers raises an exception", () => {
   );
 });
 
+// Boolean:
+test("boolean and", () => {
+  expect(nixrt.and(true, false)).toBe(false);
+  expect(nixrt.and(false, 1)).toBe(false); // emulates nix's behaviour
+});
+
+test("boolean and with non-booleans raises an exception", () => {
+  expect(() => nixrt.and(true, 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(1, true)).toThrow(nixrt.EvaluationException);
+});
+
+test("boolean implication", () => {
+  expect(nixrt.implication(false, false)).toBe(true);
+  expect(nixrt.implication(false, 1)).toBe(true); // emulates nix's behaviour
+});
+
+test("boolean implication with non-booleans raises an exception", () => {
+  expect(() => nixrt.implication(true, 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.implication(1, true)).toThrow(nixrt.EvaluationException);
+});
+
+test("boolean invert", () => {
+  expect(nixrt.invert(false)).toBe(true);
+});
+
+test("boolean invert with non-booleans raises an exception", () => {
+  expect(() => nixrt.invert(1)).toThrow(nixrt.EvaluationException);
+});
+
+test("boolean or", () => {
+  expect(nixrt.or(true, false)).toBe(true);
+  expect(nixrt.or(true, 1)).toBe(true); // emulates nix's behaviour
+});
+
+test("boolean or with non-booleans raises an exception", () => {
+  expect(() => nixrt.or(false, 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.or(1, true)).toThrow(nixrt.EvaluationException);
+});
+
+// Type functions:
 test("typeOf", () => {
   expect(nixrt.typeOf(new NixInt(1))).toBe("int");
   expect(nixrt.typeOf(5.0)).toBe("float");
