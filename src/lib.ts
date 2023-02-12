@@ -120,6 +120,16 @@ function asBooleanOperand(operand: any): boolean {
   return operand;
 }
 
+// List:
+export function concat(lhs: any, rhs: any): any {
+  if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
+    throw new EvaluationException(
+      `Cannot concatenate '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+    );
+  }
+  return lhs.concat(rhs);
+}
+
 // Type functions:
 export function typeOf(object: any): string {
   if (object === null) {
@@ -163,6 +173,9 @@ export default {
   implication,
   invert,
   or,
+
+  // List,
+  concat,
 
   // Type functions:
   typeOf,

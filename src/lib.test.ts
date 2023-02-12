@@ -131,6 +131,21 @@ test("boolean or with non-booleans raises an exception", () => {
   expect(() => nixrt.or(1, true)).toThrow(nixrt.EvaluationException);
 });
 
+// List:
+test("list concatenation and", () => {
+  const list_1 = [1];
+  const list_2 = [2];
+  expect(nixrt.concat(list_1, list_2)).toStrictEqual([1, 2]);
+  // Here's we're verifying that neither of the operands is mutated.
+  expect(list_1).toStrictEqual([1]);
+  expect(list_2).toStrictEqual([2]);
+});
+
+test("concatenating non-lists raises an exception", () => {
+  expect(() => nixrt.concat([], 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.concat(true, [])).toThrow(nixrt.EvaluationException);
+});
+
 // Type functions:
 test("typeOf", () => {
   expect(nixrt.typeOf(new NixInt(1))).toBe("int");
