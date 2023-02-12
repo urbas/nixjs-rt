@@ -38,6 +38,11 @@ test("subtracts a NixInt and a float", () => {
   expect(nixrt.sub(2.0, new NixInt(1))).toBe(1);
 });
 
+test("subtracting non-numbers raises an exception", () => {
+  expect(() => nixrt.sub("foo", 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.mul(1, "foo")).toThrow(nixrt.EvaluationException);
+});
+
 test("multiplies two NixInts", () => {
   const result = nixrt.mul(new NixInt(2), new NixInt(3)) as NixInt;
   expect(result.value).toBe(6);
@@ -80,4 +85,14 @@ test("dividing non-numbers raises an exception", () => {
   expect(() => nixrt.div("foo", new NixInt(1))).toThrow(
     nixrt.EvaluationException
   );
+});
+
+test("typeOf", () => {
+  expect(nixrt.typeOf(new NixInt(1))).toBe("int");
+  expect(nixrt.typeOf(5.0)).toBe("float");
+  expect(nixrt.typeOf("a")).toBe("string");
+  expect(nixrt.typeOf(true)).toBe("bool");
+  expect(nixrt.typeOf(null)).toBe("null");
+  expect(nixrt.typeOf([1, 2])).toBe("list");
+  // TODO: cover other Nix types
 });
