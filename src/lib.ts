@@ -37,7 +37,7 @@ export function add(lhs: any, rhs: any): any {
   return lhs + rhs;
 }
 
-export function sub(lhs: any, rhs: any): any {
+export function sub(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(lhs)) {
     throw new EvaluationException(
       `Cannot subtract '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
@@ -55,7 +55,7 @@ export function sub(lhs: any, rhs: any): any {
   return lhs - rhs;
 }
 
-export function mul(lhs: any, rhs: any): any {
+export function mul(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(rhs)) {
     throw new EvaluationException(
       `Cannot multiply '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
@@ -73,7 +73,7 @@ export function mul(lhs: any, rhs: any): any {
   return lhs * rhs;
 }
 
-export function div(lhs: any, rhs: any): any {
+export function div(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(rhs)) {
     throw new EvaluationException(
       `Cannot divide '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
@@ -89,6 +89,32 @@ export function div(lhs: any, rhs: any): any {
     return lhs / rhs.value;
   }
   return lhs / rhs;
+}
+
+// Boolean:
+export function and(lhs: any, rhs: any): boolean {
+  return asBooleanOperand(lhs) && asBooleanOperand(rhs);
+}
+
+export function implication(lhs: any, rhs: any): boolean {
+  return !asBooleanOperand(lhs) || asBooleanOperand(rhs);
+}
+
+export function invert(operand: any): boolean {
+  return !asBooleanOperand(operand);
+}
+
+export function or(lhs: any, rhs: any): boolean {
+  return asBooleanOperand(lhs) || asBooleanOperand(rhs);
+}
+
+function asBooleanOperand(operand: any): boolean {
+  if (typeof operand !== "boolean") {
+    throw new EvaluationException(
+      `Value is '${typeOf(operand)}' but a boolean was expected.`
+    );
+  }
+  return operand;
 }
 
 // Type functions:
@@ -128,6 +154,12 @@ export default {
   mul,
   neg,
   sub,
+
+  // Boolean,
+  and,
+  implication,
+  invert,
+  or,
 
   // Type functions:
   typeOf,
