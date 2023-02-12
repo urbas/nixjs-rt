@@ -18,6 +18,9 @@ export class EvaluationException extends Error {
 
 // Arithmetic:
 export function neg(operand: any): any {
+  if (!isNumber(operand)) {
+    throw new EvaluationException(`Cannot negate '${typeOf(operand)}'.`);
+  }
   if (operand instanceof NixInt) {
     return new NixInt(-operand.value);
   }

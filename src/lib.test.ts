@@ -11,6 +11,10 @@ test("negative float", () => {
   expect(nixrt.neg(2.5)).toBe(-2.5);
 });
 
+test("negative non-number", () => {
+  expect(() => nixrt.neg("a")).toThrow(nixrt.EvaluationException);
+});
+
 test("adds two NixInts", () => {
   const result = nixrt.add(new NixInt(1), new NixInt(2)) as NixInt;
   expect(result.value).toBe(3);
