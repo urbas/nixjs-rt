@@ -132,14 +132,14 @@ test("boolean or with non-booleans raises an exception", () => {
 });
 
 // Comparison:
-test("numerical less-than operator", () => {
+test("'<' operator on numbers", () => {
   expect(nixrt.less(1, 2)).toBe(true);
   expect(nixrt.less(new NixInt(1), new NixInt(2))).toBe(true);
   expect(nixrt.less(new NixInt(1), 2)).toBe(true);
   expect(nixrt.less(1, new NixInt(2))).toBe(true);
 });
 
-test("mixed-type comparison throws", () => {
+test("'<' operator on mixed-types throws", () => {
   expect(() => nixrt.less(new NixInt(1), true)).toThrow(
     nixrt.EvaluationException
   );
@@ -149,20 +149,20 @@ test("mixed-type comparison throws", () => {
   expect(() => nixrt.less(true, 1.0)).toThrow(nixrt.EvaluationException);
 });
 
-test("string less-than operator", () => {
+test("'<' operator on strings", () => {
   expect(nixrt.less("a", "b")).toBe(true);
   expect(nixrt.less("foo", "b")).toBe(false);
 });
 
-test("boolean less-than operator throws", () => {
+test("'<' operator on booleans throws", () => {
   expect(() => nixrt.less(false, true)).toThrow(nixrt.EvaluationException);
 });
 
-test("null less-than operator throws", () => {
+test("'<' operator on null vlaues throws", () => {
   expect(() => nixrt.less(null, null)).toThrow(nixrt.EvaluationException);
 });
 
-test("list less-than operator", () => {
+test("'<' operator lists", () => {
   expect(nixrt.less([], [])).toBe(false);
   expect(nixrt.less([], [1])).toBe(true);
   expect(nixrt.less([1], [])).toBe(false);
@@ -173,20 +173,27 @@ test("list less-than operator", () => {
   expect(nixrt.less([new NixInt(1)], [new NixInt(2)])).toBe(true);
 });
 
-test("list invalid", () => {
+test("'<' operator list invalid", () => {
   expect(() => nixrt.less([true], [1])).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.less([true], [false])).toThrow(nixrt.EvaluationException);
 });
 
-test("list less-than operator", () => {
-  expect(nixrt.less([], [])).toBe(false);
-  expect(nixrt.less([], [1])).toBe(true);
-  expect(nixrt.less([1], [])).toBe(false);
-  expect(nixrt.less([1], [1, 2])).toBe(true);
-  expect(nixrt.less([1, 2], [1])).toBe(false);
-  expect(nixrt.less([1, 1], [1, 2])).toBe(true);
-  expect(nixrt.less([1, true], [1])).toBe(false);
-  expect(nixrt.less([new NixInt(1)], [new NixInt(2)])).toBe(true);
+test("'<=' operator", () => {
+  expect(nixrt.less_eq(1, 0)).toBe(false);
+  expect(nixrt.less_eq(1, 1)).toBe(true);
+  expect(nixrt.less_eq(1, 2)).toBe(true);
+});
+
+test("'>=' operator", () => {
+  expect(nixrt.more_eq(1, 0)).toBe(true);
+  expect(nixrt.more_eq(1, 1)).toBe(true);
+  expect(nixrt.more_eq(1, 2)).toBe(false);
+});
+
+test("'>' operator", () => {
+  expect(nixrt.more(1, 0)).toBe(true);
+  expect(nixrt.more(1, 1)).toBe(false);
+  expect(nixrt.more(1, 2)).toBe(false);
 });
 
 // List:
