@@ -121,6 +121,51 @@ function asBooleanOperand(operand: any): boolean {
 }
 
 // Comparison:
+export function eq(lhs: any, rhs: any): boolean {
+  switch (typeof lhs) {
+    case "number":
+      if (typeof rhs === "number") {
+        return lhs === rhs;
+      } else if (rhs instanceof NixInt) {
+        return lhs === rhs.value;
+      }
+      return false;
+    case "object":
+      return _object_eq(lhs, rhs);
+    default:
+      return lhs === rhs;
+  }
+}
+
+function _object_eq(lhs: Object, rhs: any): boolean {
+  if (lhs instanceof NixInt) {
+    if (rhs instanceof NixInt) {
+      return lhs.value === rhs.value;
+    }
+    return lhs.value === rhs;
+  }
+  if (Array.isArray(lhs)) {
+    return Array.isArray(rhs) && _arrays_eq(lhs, rhs);
+  }
+  return lhs === rhs;
+}
+
+function _arrays_eq(lhs: Array<any>, rhs: Array<any>): boolean {
+  if (lhs.length !== rhs.length) {
+    return false;
+  }
+  for (let idx = 0; idx < lhs.length; idx++) {
+    if (!eq(lhs[idx], rhs[idx])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function neq(lhs: any, rhs: any): boolean {
+  return !eq(lhs, rhs);
+}
+
 export function less(lhs: any, rhs: any): boolean {
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
@@ -242,10 +287,12 @@ export default {
   or,
 
   // Comparison,
+  eq,
   more_eq,
   more,
   less_eq,
   less,
+  neq,
 
   // List,
   concat,

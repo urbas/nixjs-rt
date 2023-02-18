@@ -132,6 +132,46 @@ test("boolean or with non-booleans raises an exception", () => {
 });
 
 // Comparison:
+test("'==' operator on numbers", () => {
+  expect(nixrt.eq(1, 2)).toBe(false);
+  expect(nixrt.eq(1, 1)).toBe(true);
+  expect(nixrt.eq(new NixInt(1), new NixInt(2))).toBe(false);
+  expect(nixrt.eq(new NixInt(1), new NixInt(1))).toBe(true);
+  expect(nixrt.eq(new NixInt(1), 1.1)).toBe(false);
+  expect(nixrt.eq(new NixInt(1), 1.0)).toBe(true);
+  expect(nixrt.eq(1.0, new NixInt(1))).toBe(true);
+});
+
+test("'==' operator on booleans", () => {
+  expect(nixrt.eq(true, false)).toBe(false);
+  expect(nixrt.eq(true, true)).toBe(true);
+});
+
+test("'==' operator on strings", () => {
+  expect(nixrt.eq("", "")).toBe(true);
+  expect(nixrt.eq("a", "b")).toBe(false);
+});
+
+test("'==' operator on lists", () => {
+  expect(nixrt.eq([], [])).toBe(true);
+  expect(nixrt.eq([1], [1])).toBe(true);
+  expect(nixrt.eq([[1]], [[1]])).toBe(true);
+  expect(nixrt.eq([1], [2])).toBe(false);
+  expect(nixrt.eq([new NixInt(1)], [new NixInt(1)])).toBe(true);
+  expect(nixrt.eq([new NixInt(1)], [new NixInt(2)])).toBe(false);
+});
+
+test("'==' operator on nulls", () => {
+  expect(nixrt.eq(null, null)).toBe(true);
+  expect(nixrt.eq(null, 1)).toBe(false);
+  expect(nixrt.eq("a", null)).toBe(false);
+});
+
+test("'!=' operator", () => {
+  expect(nixrt.neq(1, 2)).toBe(true);
+  expect(nixrt.neq(1, 1)).toBe(false);
+});
+
 test("'<' operator on numbers", () => {
   expect(nixrt.less(1, 2)).toBe(true);
   expect(nixrt.less(new NixInt(1), new NixInt(2))).toBe(true);
