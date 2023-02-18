@@ -143,6 +143,18 @@ export function less(lhs: any, rhs: any): boolean {
   return _equalTypesLess(lhs, rhs);
 }
 
+export function less_eq(lhs: any, rhs: any): boolean {
+  return !less(rhs, lhs);
+}
+
+export function greater(lhs: any, rhs: any): boolean {
+  return less(rhs, lhs);
+}
+
+export function greater_eq(lhs: any, rhs: any): boolean {
+  return !less(lhs, rhs);
+}
+
 function _equalTypesLess(lhs: any, rhs: any): boolean {
   switch (typeof lhs) {
     case "object":
@@ -230,6 +242,9 @@ export default {
   or,
 
   // Comparison,
+  greater_eq,
+  greater,
+  less_eq,
   less,
 
   // List,
