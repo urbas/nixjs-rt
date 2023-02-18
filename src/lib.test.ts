@@ -131,6 +131,64 @@ test("boolean or with non-booleans raises an exception", () => {
   expect(() => nixrt.or(1, true)).toThrow(nixrt.EvaluationException);
 });
 
+// Comparison:
+test("numerical less-than operator", () => {
+  expect(nixrt.less(1, 2)).toBe(true);
+  expect(nixrt.less(new NixInt(1), new NixInt(2))).toBe(true);
+  expect(nixrt.less(new NixInt(1), 2)).toBe(true);
+  expect(nixrt.less(1, new NixInt(2))).toBe(true);
+});
+
+test("mixed-type comparison throws", () => {
+  expect(() => nixrt.less(new NixInt(1), true)).toThrow(
+    nixrt.EvaluationException
+  );
+  expect(() => nixrt.less(true, new NixInt(1))).toThrow(
+    nixrt.EvaluationException
+  );
+  expect(() => nixrt.less(true, 1.0)).toThrow(nixrt.EvaluationException);
+});
+
+test("string less-than operator", () => {
+  expect(nixrt.less("a", "b")).toBe(true);
+  expect(nixrt.less("foo", "b")).toBe(false);
+});
+
+test("boolean less-than operator throws", () => {
+  expect(() => nixrt.less(false, true)).toThrow(nixrt.EvaluationException);
+});
+
+test("null less-than operator throws", () => {
+  expect(() => nixrt.less(null, null)).toThrow(nixrt.EvaluationException);
+});
+
+test("list less-than operator", () => {
+  expect(nixrt.less([], [])).toBe(false);
+  expect(nixrt.less([], [1])).toBe(true);
+  expect(nixrt.less([1], [])).toBe(false);
+  expect(nixrt.less([1], [1, 2])).toBe(true);
+  expect(nixrt.less([1, 2], [1])).toBe(false);
+  expect(nixrt.less([1, 1], [1, 2])).toBe(true);
+  expect(nixrt.less([1, true], [1])).toBe(false);
+  expect(nixrt.less([new NixInt(1)], [new NixInt(2)])).toBe(true);
+});
+
+test("list invalid", () => {
+  expect(() => nixrt.less([true], [1])).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.less([true], [false])).toThrow(nixrt.EvaluationException);
+});
+
+test("list less-than operator", () => {
+  expect(nixrt.less([], [])).toBe(false);
+  expect(nixrt.less([], [1])).toBe(true);
+  expect(nixrt.less([1], [])).toBe(false);
+  expect(nixrt.less([1], [1, 2])).toBe(true);
+  expect(nixrt.less([1, 2], [1])).toBe(false);
+  expect(nixrt.less([1, 1], [1, 2])).toBe(true);
+  expect(nixrt.less([1, true], [1])).toBe(false);
+  expect(nixrt.less([new NixInt(1)], [new NixInt(2)])).toBe(true);
+});
+
 // List:
 test("list concatenation and", () => {
   const list_1 = [1];

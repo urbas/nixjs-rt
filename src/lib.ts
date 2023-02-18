@@ -120,8 +120,63 @@ function asBooleanOperand(operand: any): boolean {
   return operand;
 }
 
+// Comparison:
+export function less(lhs: any, rhs: any): boolean {
+  if (lhs instanceof NixInt) {
+    if (rhs instanceof NixInt) {
+      return lhs.value < rhs.value;
+    }
+    if (typeof rhs !== "number") {
+      _throwLessThanTypeError(lhs, rhs);
+    }
+    return lhs.value < rhs;
+  }
+  if (rhs instanceof NixInt) {
+    if (typeof lhs !== "number") {
+      _throwLessThanTypeError(lhs, rhs);
+    }
+    return lhs < rhs.value;
+  }
+  if (typeof lhs !== typeof rhs || lhs === null || rhs === null) {
+    _throwLessThanTypeError(lhs, rhs);
+  }
+  return _equalTypesLess(lhs, rhs);
+}
+
+function _equalTypesLess(lhs: any, rhs: any): boolean {
+  switch (typeof lhs) {
+    case "object":
+      if (Array.isArray(lhs)) {
+        return _listLess(lhs, rhs);
+      }
+      _throwLessThanTypeError(lhs, rhs);
+    case "boolean":
+      _throwLessThanTypeError(lhs, rhs);
+    default:
+      return lhs < rhs;
+  }
+}
+
+function _listLess(lhs: Array<any>, rhs: Array<any>): boolean {
+  const minLen = Math.min(lhs.length, rhs.length);
+  for (let idx = 0; idx < minLen; idx++) {
+    const currentLhs = lhs[idx];
+    const currentRhs = rhs[idx];
+    if (less(currentLhs, currentRhs)) {
+      return true;
+    }
+  }
+  return lhs.length < rhs.length;
+}
+
+function _throwLessThanTypeError(lhs: any, rhs: any): void {
+  throw new EvaluationException(
+    `Cannot compare '${typeOf(lhs)}' with '${typeOf(rhs)}'.`
+  );
+}
+
 // List:
-export function concat(lhs: any, rhs: any): any {
+export function concat(lhs: any, rhs: any): Array<any> {
   if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
     throw new EvaluationException(
       `Cannot concatenate '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
@@ -173,6 +228,9 @@ export default {
   implication,
   invert,
   or,
+
+  // Comparison,
+  less,
 
   // List,
   concat,
