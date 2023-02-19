@@ -1,9 +1,18 @@
 // Types:
 export class NixInt {
-  value: number;
+  value: BigInt64Array;
 
-  constructor(value: number) {
-    this.value = value;
+  constructor(value: bigint) {
+    this.value = new BigInt64Array(1);
+    this.value[0] = value;
+  }
+
+  get number(): number {
+    return Number(this.value[0]);
+  }
+
+  get int64(): bigint {
+    return this.value[0];
   }
 }
 
@@ -22,7 +31,7 @@ export function neg(operand: any): any {
     throw new EvaluationException(`Cannot negate '${typeOf(operand)}'.`);
   }
   if (operand instanceof NixInt) {
-    return new NixInt(-operand.value);
+    return new NixInt(-operand.value[0]);
   }
   return -operand;
 }
@@ -30,12 +39,12 @@ export function neg(operand: any): any {
 export function add(lhs: any, rhs: any): any {
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
-      return new NixInt(lhs.value + rhs.value);
+      return new NixInt(lhs.int64 + rhs.int64);
     }
-    return lhs.value + rhs;
+    return lhs.number + rhs;
   }
   if (rhs instanceof NixInt) {
-    return lhs + rhs.value;
+    return lhs + rhs.number;
   }
   return lhs + rhs;
 }
@@ -48,12 +57,12 @@ export function sub(lhs: any, rhs: any): number | NixInt {
   }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
-      return new NixInt(lhs.value - rhs.value);
+      return new NixInt(lhs.int64 - rhs.int64);
     }
-    return lhs.value - rhs;
+    return lhs.number - rhs;
   }
   if (rhs instanceof NixInt) {
-    return lhs - rhs.value;
+    return lhs - rhs.number;
   }
   return lhs - rhs;
 }
@@ -66,12 +75,12 @@ export function mul(lhs: any, rhs: any): number | NixInt {
   }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
-      return new NixInt(lhs.value * rhs.value);
+      return new NixInt(lhs.int64 * rhs.int64);
     }
-    return lhs.value * rhs;
+    return lhs.number * rhs;
   }
   if (rhs instanceof NixInt) {
-    return lhs * rhs.value;
+    return lhs * rhs.number;
   }
   return lhs * rhs;
 }
@@ -84,12 +93,12 @@ export function div(lhs: any, rhs: any): number | NixInt {
   }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
-      return new NixInt(Math.floor(lhs.value / rhs.value));
+      return new NixInt(lhs.int64 / rhs.int64);
     }
-    return lhs.value / rhs;
+    return lhs.number / rhs;
   }
   if (rhs instanceof NixInt) {
-    return lhs / rhs.value;
+    return lhs / rhs.number;
   }
   return lhs / rhs;
 }
@@ -127,7 +136,7 @@ export function eq(lhs: any, rhs: any): boolean {
       if (typeof rhs === "number") {
         return lhs === rhs;
       } else if (rhs instanceof NixInt) {
-        return lhs === rhs.value;
+        return lhs === rhs.number;
       }
       return false;
     case "object":
@@ -146,9 +155,9 @@ function _object_eq(lhs: Object, rhs: any): boolean {
   }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
-      return lhs.value === rhs.value;
+      return lhs.int64 === rhs.int64;
     }
-    return lhs.value === rhs;
+    return lhs.number === rhs;
   }
   return lhs === rhs;
 }
