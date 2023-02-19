@@ -138,14 +138,17 @@ export function eq(lhs: any, rhs: any): boolean {
 }
 
 function _object_eq(lhs: Object, rhs: any): boolean {
+  if (lhs instanceof Map) {
+    return rhs instanceof Map && _attrsets_eq(lhs, rhs);
+  }
+  if (Array.isArray(lhs)) {
+    return Array.isArray(rhs) && _arrays_eq(lhs, rhs);
+  }
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return lhs.value === rhs.value;
     }
     return lhs.value === rhs;
-  }
-  if (Array.isArray(lhs)) {
-    return Array.isArray(rhs) && _arrays_eq(lhs, rhs);
   }
   return lhs === rhs;
 }
@@ -156,6 +159,18 @@ function _arrays_eq(lhs: Array<any>, rhs: Array<any>): boolean {
   }
   for (let idx = 0; idx < lhs.length; idx++) {
     if (!eq(lhs[idx], rhs[idx])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function _attrsets_eq(lhs: Map<string, any>, rhs: Map<string, any>): boolean {
+  if (lhs.size !== rhs.size) {
+    return false;
+  }
+  for (const key of lhs.keys()) {
+    if (!eq(lhs.get(key), rhs.get(key))) {
       return false;
     }
   }
@@ -244,21 +259,25 @@ export function concat(lhs: any, rhs: any): Array<any> {
 
 // Type functions:
 export function typeOf(object: any): string {
-  if (object === null) {
-    return "null";
-  }
-  if (object instanceof NixInt) {
-    return "int";
-  }
-  if (Array.isArray(object)) {
-    return "list";
-  }
   const object_type = typeof object;
   switch (object_type) {
     case "boolean":
       return "bool";
     case "number":
       return "float";
+    case "object":
+      if (object === null) {
+        return "null";
+      }
+      if (object instanceof Map) {
+        return "set";
+      }
+      if (object instanceof NixInt) {
+        return "int";
+      }
+      if (Array.isArray(object)) {
+        return "list";
+      }
     default:
       return object_type;
   }

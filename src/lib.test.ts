@@ -167,6 +167,12 @@ test("'==' operator on nulls", () => {
   expect(nixrt.eq("a", null)).toBe(false);
 });
 
+test("'==' operator on attrsets", () => {
+  expect(nixrt.eq(new Map(), new Map())).toBe(true);
+  expect(nixrt.eq(new Map(), new Map([["a", 1]]))).toBe(false);
+  expect(nixrt.eq(new Map([["a", 1]]), new Map([["a", 2]]))).toBe(false);
+});
+
 test("'!=' operator", () => {
   expect(nixrt.neq(1, 2)).toBe(true);
   expect(nixrt.neq(1, 1)).toBe(false);
@@ -259,5 +265,6 @@ test("typeOf", () => {
   expect(nixrt.typeOf(true)).toBe("bool");
   expect(nixrt.typeOf(null)).toBe("null");
   expect(nixrt.typeOf([1, 2])).toBe("list");
+  expect(nixrt.typeOf(new Map())).toBe("set");
   // TODO: cover other Nix types
 });
