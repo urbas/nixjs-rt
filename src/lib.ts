@@ -1,8 +1,218 @@
 // Types:
-export class NixInt {
+export class EvaluationException extends Error {
+  message: string;
+
+  constructor(message: string) {
+    super();
+    this.message = message;
+  }
+}
+
+export abstract class NixType {
+  // Arithmetic Operators
+  add(other: NixType): NixType {
+    throw new EvaluationException(
+      `Cannot add '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  and(other: NixType): NixBool {
+    throw new EvaluationException(
+      `Cannot apply logical 'and' on '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  div(other: NixType): NixType {
+    throw new EvaluationException(
+      `Cannot divide '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  abstract eq(other: NixType): NixBool;
+
+  impl(other: NixType): NixBool {
+    throw new EvaluationException(
+      `Cannot apply logical implication on '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  mul(other: NixType): NixType {
+    throw new EvaluationException(
+      `Cannot multiply '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  neg(): NixType {
+    throw new EvaluationException(`Cannot negate '${this.typeOf()}'.`);
+  }
+
+  not(): NixType {
+    throw new EvaluationException(
+      `Cannot apply logical 'not' on '${this.typeOf()}'.`
+    );
+  }
+
+  or(other: NixType): NixBool {
+    throw new EvaluationException(
+      `Cannot apply logical 'or' on '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  sub(other: NixType): NixType {
+    throw new EvaluationException(
+      `Cannot subtract '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
+  // Builtins
+  abstract typeOf(): string;
+}
+
+export class NixAttrSet extends NixType {
+  value: Map<string, NixType>;
+
+  static EMPTY = new NixAttrSet(new Map());
+
+  constructor(value: Map<string, NixType>) {
+    super();
+    this.value = value;
+  }
+
+  eq(other: NixType): NixBool {
+    throw new Error("Method not implemented.");
+  }
+
+  typeOf(): string {
+    return "set";
+  }
+}
+
+export class NixBool extends NixType {
+  value: boolean;
+
+  static TRUE = new NixBool(true);
+  static FALSE = new NixBool(false);
+
+  constructor(value: boolean) {
+    super();
+    this.value = value;
+  }
+
+  and(other: NixType): NixBool {
+    if (!this.value) {
+      return this;
+    }
+    if (other instanceof NixBool) {
+      return other;
+    }
+    super.and(other);
+  }
+
+  eq(other: NixType): NixBool {
+    if (other instanceof NixBool) {
+      return NixBool.from(this.value === other.value);
+    }
+    return NixBool.FALSE;
+  }
+
+  static from(js_bool: boolean): NixBool {
+    return js_bool ? NixBool.TRUE : NixBool.FALSE;
+  }
+
+  impl(other: NixType): NixBool {
+    if (!this.value) {
+      return NixBool.TRUE;
+    }
+    if (other instanceof NixBool) {
+      return other;
+    }
+    super.impl(other);
+  }
+
+  not(): NixBool {
+    return NixBool.from(!this.value);
+  }
+
+  or(other: NixType): NixBool {
+    if (this.value) {
+      return this;
+    }
+    if (other instanceof NixBool) {
+      return other;
+    }
+    super.and(other);
+  }
+
+  typeOf(): string {
+    return "bool";
+  }
+}
+
+export abstract class NixNumber extends NixType {
+  abstract get number(): number;
+}
+
+export class NixFloat extends NixNumber {
+  value: number;
+
+  constructor(value: number) {
+    super();
+    this.value = value;
+  }
+
+  get number(): number {
+    return this.value;
+  }
+
+  add(other: NixType): NixFloat {
+    if (other instanceof NixNumber) {
+      return new NixFloat(this.value + other.number);
+    }
+    super.add(other);
+  }
+
+  div(other: NixType): NixFloat {
+    if (other instanceof NixNumber) {
+      return new NixFloat(this.value / other.number);
+    }
+    super.div(other);
+  }
+
+  eq(other: NixType): NixBool {
+    if (other instanceof NixNumber) {
+      return NixBool.from(this.value === other.number);
+    }
+    return NixBool.FALSE;
+  }
+
+  mul(other: NixType): NixFloat {
+    if (other instanceof NixNumber) {
+      return new NixFloat(this.value * other.number);
+    }
+    super.mul(other);
+  }
+
+  neg(): NixFloat {
+    return new NixFloat(-this.value);
+  }
+
+  sub(other: NixType): NixFloat {
+    if (other instanceof NixNumber) {
+      return new NixFloat(this.value - other.number);
+    }
+    super.sub(other);
+  }
+
+  typeOf(): string {
+    return "float";
+  }
+}
+
+export class NixInt extends NixNumber {
   value: BigInt64Array;
 
   constructor(value: bigint) {
+    super();
     this.value = new BigInt64Array(1);
     this.value[0] = value;
   }
@@ -14,119 +224,137 @@ export class NixInt {
   get int64(): bigint {
     return this.value[0];
   }
+
+  add(other: NixType): NixNumber {
+    if (other instanceof NixFloat) {
+      return new NixFloat(this.number + other.number);
+    }
+    if (other instanceof NixInt) {
+      return new NixInt(this.int64 + other.int64);
+    }
+    super.add(other);
+  }
+
+  div(other: NixType): NixNumber {
+    if (other instanceof NixFloat) {
+      return new NixFloat(this.number / other.number);
+    }
+    if (other instanceof NixInt) {
+      return new NixInt(this.int64 / other.int64);
+    }
+    super.div(other);
+  }
+
+  eq(other: NixType): NixBool {
+    if (!(other instanceof NixNumber)) {
+      return NixBool.FALSE;
+    }
+    if (other instanceof NixInt) {
+      return NixBool.from(this.int64 === other.int64);
+    }
+    if (other instanceof NixFloat) {
+      return NixBool.from(this.number === other.number);
+    }
+    throw new Error("Unreachable");
+  }
+
+  mul(other: NixType): NixNumber {
+    if (other instanceof NixFloat) {
+      return new NixFloat(this.number * other.number);
+    }
+    if (other instanceof NixInt) {
+      return new NixInt(this.int64 * other.int64);
+    }
+    super.mul(other);
+  }
+
+  neg(): NixInt {
+    return new NixInt(-this.value[0]);
+  }
+
+  sub(other: NixType): NixNumber {
+    if (other instanceof NixFloat) {
+      return new NixFloat(this.number - other.number);
+    }
+    if (other instanceof NixInt) {
+      return new NixInt(this.int64 - other.int64);
+    }
+    super.sub(other);
+  }
+
+  typeOf(): string {
+    return "int";
+  }
 }
 
-export class EvaluationException extends Error {
-  message: string;
+export class NixList extends NixType {
+  value: NixType[];
 
-  constructor(message: string) {
+  static EMPTY = new NixList([]);
+
+  constructor(value: NixType[]) {
     super();
-    this.message = message;
+    this.value = value;
   }
-}
 
-// Arithmetic:
-export function neg(operand: any): any {
-  if (!isNumber(operand)) {
-    throw new EvaluationException(`Cannot negate '${typeOf(operand)}'.`);
-  }
-  if (operand instanceof NixInt) {
-    return new NixInt(-operand.value[0]);
-  }
-  return -operand;
-}
-
-export function add(lhs: any, rhs: any): any {
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 + rhs.int64);
+  eq(other: NixType): NixBool {
+    if (!(other instanceof NixList)) {
+      return NixBool.FALSE;
     }
-    return lhs.number + rhs;
-  }
-  if (rhs instanceof NixInt) {
-    return lhs + rhs.number;
-  }
-  return lhs + rhs;
-}
-
-export function sub(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(lhs)) {
-    throw new EvaluationException(
-      `Cannot subtract '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 - rhs.int64);
+    if (this.value.length !== other.value.length) {
+      return NixBool.FALSE;
     }
-    return lhs.number - rhs;
-  }
-  if (rhs instanceof NixInt) {
-    return lhs - rhs.number;
-  }
-  return lhs - rhs;
-}
-
-export function mul(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvaluationException(
-      `Cannot multiply '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 * rhs.int64);
+    const len = this.value.length;
+    for (let idx = 0; idx < len; idx++) {
+      if (!this.value[idx].eq(other.value[idx]).value) {
+        return NixBool.FALSE;
+      }
     }
-    return lhs.number * rhs;
+    return NixBool.TRUE;
   }
-  if (rhs instanceof NixInt) {
-    return lhs * rhs.number;
+
+  typeOf(): string {
+    return "list";
   }
-  return lhs * rhs;
 }
 
-export function div(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvaluationException(
-      `Cannot divide '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
+export class NixNull extends NixType {
+  static NULL = new NixNull();
+
+  eq(other: NixType): NixBool {
+    return NixBool.from(other instanceof NixNull);
   }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 / rhs.int64);
+
+  typeOf(): string {
+    return "null";
+  }
+}
+
+export class NixString extends NixType {
+  value: string;
+
+  constructor(value: string) {
+    super();
+    this.value = value;
+  }
+
+  add(other: NixType): NixString {
+    if (other instanceof NixString) {
+      return new NixString(this.value + other.value);
     }
-    return lhs.number / rhs;
+    super.add(other);
   }
-  if (rhs instanceof NixInt) {
-    return lhs / rhs.number;
+
+  eq(other: NixType): NixBool {
+    if (other instanceof NixString) {
+      return NixBool.from(this.value === other.value);
+    }
+    return NixBool.FALSE;
   }
-  return lhs / rhs;
-}
 
-// Boolean:
-export function and(lhs: any, rhs: any): boolean {
-  return asBooleanOperand(lhs) && asBooleanOperand(rhs);
-}
-
-export function implication(lhs: any, rhs: any): boolean {
-  return !asBooleanOperand(lhs) || asBooleanOperand(rhs);
-}
-
-export function invert(operand: any): boolean {
-  return !asBooleanOperand(operand);
-}
-
-export function or(lhs: any, rhs: any): boolean {
-  return asBooleanOperand(lhs) || asBooleanOperand(rhs);
-}
-
-function asBooleanOperand(operand: any): boolean {
-  if (typeof operand !== "boolean") {
-    throw new EvaluationException(
-      `Value is '${typeOf(operand)}' but a boolean was expected.`
-    );
+  typeOf(): string {
+    return "string";
   }
-  return operand;
 }
 
 // Comparison:
@@ -292,27 +520,18 @@ export function typeOf(object: any): string {
   }
 }
 
-function isNumber(object: any): boolean {
-  return typeof object === "number" || object instanceof NixInt;
-}
-
 export default {
   // Types:
   EvaluationException,
+  NixAttrSet,
+  NixBool,
+  NixFloat,
   NixInt,
-
-  // Arithmetic:
-  add,
-  div,
-  mul,
-  neg,
-  sub,
-
-  // Boolean,
-  and,
-  implication,
-  invert,
-  or,
+  NixList,
+  NixNull,
+  NixNumber,
+  NixString,
+  NixType,
 
   // Comparison,
   eq,
