@@ -3,8 +3,8 @@ import nixrt, { NixInt } from "./lib";
 
 // Arithmetic:
 test("negative NixInt(1) equals to NixInt(-1)", () => {
-  const result = nixrt.neg(new NixInt(1)) as NixInt;
-  expect(result.value).toBe(-1);
+  const result = nixrt.neg(new NixInt(1n)) as NixInt;
+  expect(result.number).toBe(-1);
 });
 
 test("negative float", () => {
@@ -16,8 +16,15 @@ test("negative non-number", () => {
 });
 
 test("adds two NixInts", () => {
-  const result = nixrt.add(new NixInt(1), new NixInt(2)) as NixInt;
-  expect(result.value).toBe(3);
+  expect((nixrt.add(new NixInt(1n), new NixInt(2n)) as NixInt).number).toBe(3);
+  expect(
+    (
+      nixrt.add(
+        new NixInt(4611686018427387904n),
+        new NixInt(4611686018427387904n)
+      ) as NixInt
+    ).int64
+  ).toBe(-9223372036854775808n);
 });
 
 test("adds two floats", () => {
@@ -25,13 +32,13 @@ test("adds two floats", () => {
 });
 
 test("adds a NixInt and a float", () => {
-  expect(nixrt.add(new NixInt(1), 2.0)).toBe(3.0);
-  expect(nixrt.add(2.0, new NixInt(1))).toBe(3.0);
+  expect(nixrt.add(new NixInt(1n), 2.0)).toBe(3.0);
+  expect(nixrt.add(2.0, new NixInt(1n))).toBe(3.0);
 });
 
 test("subtracts two NixInts", () => {
-  const result = nixrt.sub(new NixInt(1), new NixInt(2)) as NixInt;
-  expect(result.value).toBe(-1);
+  const result = nixrt.sub(new NixInt(1n), new NixInt(2n)) as NixInt;
+  expect(result.number).toBe(-1);
 });
 
 test("subtracts two floats", () => {
@@ -39,8 +46,8 @@ test("subtracts two floats", () => {
 });
 
 test("subtracts a NixInt and a float", () => {
-  expect(nixrt.sub(new NixInt(1), 2.0)).toBe(-1);
-  expect(nixrt.sub(2.0, new NixInt(1))).toBe(1);
+  expect(nixrt.sub(new NixInt(1n), 2.0)).toBe(-1);
+  expect(nixrt.sub(2.0, new NixInt(1n))).toBe(1);
 });
 
 test("subtracting non-numbers raises an exception", () => {
@@ -49,8 +56,8 @@ test("subtracting non-numbers raises an exception", () => {
 });
 
 test("multiplies two NixInts", () => {
-  const result = nixrt.mul(new NixInt(2), new NixInt(3)) as NixInt;
-  expect(result.value).toBe(6);
+  const result = nixrt.mul(new NixInt(2n), new NixInt(3n)) as NixInt;
+  expect(result.number).toBe(6);
 });
 
 test("multiplies two floats", () => {
@@ -58,13 +65,13 @@ test("multiplies two floats", () => {
 });
 
 test("multiplies a NixInt and a float", () => {
-  expect(nixrt.mul(new NixInt(2), 3.5)).toBe(7);
-  expect(nixrt.mul(3.5, new NixInt(2))).toBe(7);
+  expect(nixrt.mul(new NixInt(2n), 3.5)).toBe(7);
+  expect(nixrt.mul(3.5, new NixInt(2n))).toBe(7);
 });
 
 test("divides two NixInts", () => {
-  const result = nixrt.div(new NixInt(5), new NixInt(2)) as NixInt;
-  expect(result.value).toBe(2);
+  const result = nixrt.div(new NixInt(5n), new NixInt(2n)) as NixInt;
+  expect(result.number).toBe(2);
 });
 
 test("divides two floats", () => {
@@ -72,14 +79,14 @@ test("divides two floats", () => {
 });
 
 test("divides a NixInt and a float", () => {
-  expect(nixrt.div(new NixInt(5), 2.0)).toBe(2.5);
-  expect(nixrt.div(5.0, new NixInt(2))).toBe(2.5);
+  expect(nixrt.div(new NixInt(5n), 2.0)).toBe(2.5);
+  expect(nixrt.div(5.0, new NixInt(2n))).toBe(2.5);
 });
 
 test("multiplying non-numbers raises an exception", () => {
   expect(() => nixrt.mul("foo", "bar")).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.mul("foo", 1.5)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.mul("foo", new NixInt(1))).toThrow(
+  expect(() => nixrt.mul("foo", new NixInt(1n))).toThrow(
     nixrt.EvaluationException
   );
 });
@@ -87,7 +94,7 @@ test("multiplying non-numbers raises an exception", () => {
 test("dividing non-numbers raises an exception", () => {
   expect(() => nixrt.div("foo", "bar")).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.div("foo", 1.5)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.div("foo", new NixInt(1))).toThrow(
+  expect(() => nixrt.div("foo", new NixInt(1n))).toThrow(
     nixrt.EvaluationException
   );
 });
@@ -135,11 +142,11 @@ test("boolean or with non-booleans raises an exception", () => {
 test("'==' operator on numbers", () => {
   expect(nixrt.eq(1, 2)).toBe(false);
   expect(nixrt.eq(1, 1)).toBe(true);
-  expect(nixrt.eq(new NixInt(1), new NixInt(2))).toBe(false);
-  expect(nixrt.eq(new NixInt(1), new NixInt(1))).toBe(true);
-  expect(nixrt.eq(new NixInt(1), 1.1)).toBe(false);
-  expect(nixrt.eq(new NixInt(1), 1.0)).toBe(true);
-  expect(nixrt.eq(1.0, new NixInt(1))).toBe(true);
+  expect(nixrt.eq(new NixInt(1n), new NixInt(2n))).toBe(false);
+  expect(nixrt.eq(new NixInt(1n), new NixInt(1n))).toBe(true);
+  expect(nixrt.eq(new NixInt(1n), 1.1)).toBe(false);
+  expect(nixrt.eq(new NixInt(1n), 1.0)).toBe(true);
+  expect(nixrt.eq(1.0, new NixInt(1n))).toBe(true);
 });
 
 test("'==' operator on booleans", () => {
@@ -157,8 +164,8 @@ test("'==' operator on lists", () => {
   expect(nixrt.eq([1], [1])).toBe(true);
   expect(nixrt.eq([[1]], [[1]])).toBe(true);
   expect(nixrt.eq([1], [2])).toBe(false);
-  expect(nixrt.eq([new NixInt(1)], [new NixInt(1)])).toBe(true);
-  expect(nixrt.eq([new NixInt(1)], [new NixInt(2)])).toBe(false);
+  expect(nixrt.eq([new NixInt(1n)], [new NixInt(1n)])).toBe(true);
+  expect(nixrt.eq([new NixInt(1n)], [new NixInt(2n)])).toBe(false);
 });
 
 test("'==' operator on nulls", () => {
@@ -180,16 +187,16 @@ test("'!=' operator", () => {
 
 test("'<' operator on numbers", () => {
   expect(nixrt.less(1, 2)).toBe(true);
-  expect(nixrt.less(new NixInt(1), new NixInt(2))).toBe(true);
-  expect(nixrt.less(new NixInt(1), 2)).toBe(true);
-  expect(nixrt.less(1, new NixInt(2))).toBe(true);
+  expect(nixrt.less(new NixInt(1n), new NixInt(2n))).toBe(true);
+  expect(nixrt.less(new NixInt(1n), 2)).toBe(true);
+  expect(nixrt.less(1, new NixInt(2n))).toBe(true);
 });
 
 test("'<' operator on mixed-types throws", () => {
-  expect(() => nixrt.less(new NixInt(1), true)).toThrow(
+  expect(() => nixrt.less(new NixInt(1n), true)).toThrow(
     nixrt.EvaluationException
   );
-  expect(() => nixrt.less(true, new NixInt(1))).toThrow(
+  expect(() => nixrt.less(true, new NixInt(1n))).toThrow(
     nixrt.EvaluationException
   );
   expect(() => nixrt.less(true, 1.0)).toThrow(nixrt.EvaluationException);
@@ -216,7 +223,7 @@ test("'<' operator lists", () => {
   expect(nixrt.less([1, 2], [1])).toBe(false);
   expect(nixrt.less([1, 1], [1, 2])).toBe(true);
   expect(nixrt.less([1, true], [1])).toBe(false);
-  expect(nixrt.less([new NixInt(1)], [new NixInt(2)])).toBe(true);
+  expect(nixrt.less([new NixInt(1n)], [new NixInt(2n)])).toBe(true);
 });
 
 test("'<' operator list invalid", () => {
@@ -259,7 +266,7 @@ test("concatenating non-lists raises an exception", () => {
 
 // Type functions:
 test("typeOf", () => {
-  expect(nixrt.typeOf(new NixInt(1))).toBe("int");
+  expect(nixrt.typeOf(new NixInt(1n))).toBe("int");
   expect(nixrt.typeOf(5.0)).toBe("float");
   expect(nixrt.typeOf("a")).toBe("string");
   expect(nixrt.typeOf(true)).toBe("bool");
