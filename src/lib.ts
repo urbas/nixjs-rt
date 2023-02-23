@@ -213,7 +213,7 @@ export function less(lhs: any, rhs: any): boolean {
 }
 
 export function less_eq(lhs: any, rhs: any): boolean {
-  return !less(rhs, lhs);
+  return eq(lhs, rhs) || less(lhs, rhs);
 }
 
 export function more(lhs: any, rhs: any): boolean {
@@ -221,7 +221,7 @@ export function more(lhs: any, rhs: any): boolean {
 }
 
 export function more_eq(lhs: any, rhs: any): boolean {
-  return !less(lhs, rhs);
+  return eq(lhs, rhs) || more(lhs, rhs);
 }
 
 function _equalTypesLess(lhs: any, rhs: any): boolean {

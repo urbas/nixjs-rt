@@ -235,12 +235,20 @@ test("'<=' operator", () => {
   expect(nixrt.less_eq(1, 0)).toBe(false);
   expect(nixrt.less_eq(1, 1)).toBe(true);
   expect(nixrt.less_eq(1, 2)).toBe(true);
+
+  // This reproduces nix's observed behaviour
+  expect(nixrt.less_eq([true], [true])).toBe(true);
+  expect(nixrt.less_eq([null], [null])).toBe(true);
 });
 
 test("'>=' operator", () => {
   expect(nixrt.more_eq(1, 0)).toBe(true);
   expect(nixrt.more_eq(1, 1)).toBe(true);
   expect(nixrt.more_eq(1, 2)).toBe(false);
+
+  // This reproduces nix's observed behaviour
+  expect(nixrt.more_eq([true], [true])).toBe(true);
+  expect(nixrt.more_eq([null], [null])).toBe(true);
 });
 
 test("'>' operator", () => {
