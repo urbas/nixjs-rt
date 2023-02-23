@@ -2,20 +2,20 @@ import { expect, test } from "@jest/globals";
 import nixrt, { NixInt } from "./lib";
 
 // Arithmetic:
-test("negative NixInt(1) equals to NixInt(-1)", () => {
+test("unary '-' operator on integers", () => {
   const result = nixrt.neg(new NixInt(1n)) as NixInt;
   expect(result.number).toBe(-1);
 });
 
-test("negative float", () => {
+test("unary '-' operator on floats", () => {
   expect(nixrt.neg(2.5)).toBe(-2.5);
 });
 
-test("negative non-number", () => {
+test("unary '-' operator on non-numbers", () => {
   expect(() => nixrt.neg("a")).toThrow(nixrt.EvaluationException);
 });
 
-test("adds two NixInts", () => {
+test("'+' operator on integers", () => {
   expect((nixrt.add(new NixInt(1n), new NixInt(2n)) as NixInt).number).toBe(3);
   expect(
     (
@@ -27,63 +27,49 @@ test("adds two NixInts", () => {
   ).toBe(-9223372036854775808n);
 });
 
-test("adds two floats", () => {
+test("'+' operator on floats", () => {
   expect(nixrt.add(1.0, 2.0)).toBe(3);
 });
 
-test("adds a NixInt and a float", () => {
+test("'+' operator on mixed integers and floats", () => {
   expect(nixrt.add(new NixInt(1n), 2.0)).toBe(3.0);
   expect(nixrt.add(2.0, new NixInt(1n))).toBe(3.0);
 });
 
-test("subtracts two NixInts", () => {
+test("'-' operator on integers", () => {
   const result = nixrt.sub(new NixInt(1n), new NixInt(2n)) as NixInt;
   expect(result.number).toBe(-1);
 });
 
-test("subtracts two floats", () => {
+test("'-' operator on floats", () => {
   expect(nixrt.sub(1.0, 2.0)).toBe(-1);
 });
 
-test("subtracts a NixInt and a float", () => {
+test("'-' operator on mixed integers and floats", () => {
   expect(nixrt.sub(new NixInt(1n), 2.0)).toBe(-1);
   expect(nixrt.sub(2.0, new NixInt(1n))).toBe(1);
 });
 
-test("subtracting non-numbers raises an exception", () => {
+test("'-' operator on non-numbers raises exceptions", () => {
   expect(() => nixrt.sub("foo", 1)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.mul(1, "foo")).toThrow(nixrt.EvaluationException);
 });
 
-test("multiplies two NixInts", () => {
+test("'*' operator on integers", () => {
   const result = nixrt.mul(new NixInt(2n), new NixInt(3n)) as NixInt;
   expect(result.number).toBe(6);
 });
 
-test("multiplies two floats", () => {
+test("'*' operator on floats", () => {
   expect(nixrt.mul(2.0, 3.5)).toBe(7);
 });
 
-test("multiplies a NixInt and a float", () => {
+test("'*' operator on mixed integers and floats", () => {
   expect(nixrt.mul(new NixInt(2n), 3.5)).toBe(7);
   expect(nixrt.mul(3.5, new NixInt(2n))).toBe(7);
 });
 
-test("divides two NixInts", () => {
-  const result = nixrt.div(new NixInt(5n), new NixInt(2n)) as NixInt;
-  expect(result.number).toBe(2);
-});
-
-test("divides two floats", () => {
-  expect(nixrt.div(5.0, 2)).toBe(2.5);
-});
-
-test("divides a NixInt and a float", () => {
-  expect(nixrt.div(new NixInt(5n), 2.0)).toBe(2.5);
-  expect(nixrt.div(5.0, new NixInt(2n))).toBe(2.5);
-});
-
-test("multiplying non-numbers raises an exception", () => {
+test("'*' operator on non-numbers raises exceptions", () => {
   expect(() => nixrt.mul("foo", "bar")).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.mul("foo", 1.5)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.mul("foo", new NixInt(1n))).toThrow(
@@ -91,7 +77,21 @@ test("multiplying non-numbers raises an exception", () => {
   );
 });
 
-test("dividing non-numbers raises an exception", () => {
+test("'/' operator on integers", () => {
+  const result = nixrt.div(new NixInt(5n), new NixInt(2n)) as NixInt;
+  expect(result.number).toBe(2);
+});
+
+test("'/' operator on floats", () => {
+  expect(nixrt.div(5.0, 2)).toBe(2.5);
+});
+
+test("'/' operator on mixed integers and floats", () => {
+  expect(nixrt.div(new NixInt(5n), 2.0)).toBe(2.5);
+  expect(nixrt.div(5.0, new NixInt(2n))).toBe(2.5);
+});
+
+test("'/' operator on non-numbers raises exceptions", () => {
   expect(() => nixrt.div("foo", "bar")).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.div("foo", 1.5)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.div("foo", new NixInt(1n))).toThrow(
@@ -100,40 +100,40 @@ test("dividing non-numbers raises an exception", () => {
 });
 
 // Boolean:
-test("boolean and", () => {
+test("'&&' operator on booleans", () => {
   expect(nixrt.and(true, false)).toBe(false);
   expect(nixrt.and(false, 1)).toBe(false); // emulates nix's behaviour
 });
 
-test("boolean and with non-booleans raises an exception", () => {
+test("'&&' operator on non-booleans raises exceptions", () => {
   expect(() => nixrt.and(true, 1)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.and(1, true)).toThrow(nixrt.EvaluationException);
 });
 
-test("boolean implication", () => {
+test("'->' operator on booleans", () => {
   expect(nixrt.implication(false, false)).toBe(true);
   expect(nixrt.implication(false, 1)).toBe(true); // emulates nix's behaviour
 });
 
-test("boolean implication with non-booleans raises an exception", () => {
+test("'->' operator on non-booleans raises exceptions", () => {
   expect(() => nixrt.implication(true, 1)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.implication(1, true)).toThrow(nixrt.EvaluationException);
 });
 
-test("boolean invert", () => {
+test("'!' operator on booleans", () => {
   expect(nixrt.invert(false)).toBe(true);
 });
 
-test("boolean invert with non-booleans raises an exception", () => {
+test("'!' operator on non-booleans raises exceptions", () => {
   expect(() => nixrt.invert(1)).toThrow(nixrt.EvaluationException);
 });
 
-test("boolean or", () => {
+test("'||' operator on booleans", () => {
   expect(nixrt.or(true, false)).toBe(true);
   expect(nixrt.or(true, 1)).toBe(true); // emulates nix's behaviour
 });
 
-test("boolean or with non-booleans raises an exception", () => {
+test("'||' operator on non-booleans raises exceptions", () => {
   expect(() => nixrt.or(false, 1)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.or(1, true)).toThrow(nixrt.EvaluationException);
 });
@@ -180,7 +180,7 @@ test("'==' operator on attrsets", () => {
   expect(nixrt.eq(new Map([["a", 1]]), new Map([["a", 2]]))).toBe(false);
 });
 
-test("'!=' operator", () => {
+test("'!=' operator on floats", () => {
   expect(nixrt.neq(1, 2)).toBe(true);
   expect(nixrt.neq(1, 1)).toBe(false);
 });
