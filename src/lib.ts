@@ -104,13 +104,55 @@ export function div(lhs: any, rhs: any): number | NixInt {
 }
 
 // Attrset:
-export function has(lhs: any, rhs: any): boolean {
-  if (!(lhs instanceof Map) || typeof rhs !== "string") {
-    throw new EvaluationException(
-      `Cannot apply operator '?' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
+export function attrpath(...attrs: any[]): string[] {
+  return attrs;
+}
+
+export function attrset(...entries: [string[], any][]): Map<string, any> {
+  const newAttrset = new Map();
+  for (const [attrpath, value] of entries) {
+    _setAttrpath(newAttrset, attrpath, value);
   }
-  return lhs.has(rhs);
+  return newAttrset;
+}
+
+export function has(theAttrset: any, attrPath: string[]): boolean {
+  let foundValue = theAttrset;
+  for (const attr of attrPath) {
+    if (!(foundValue instanceof Map)) {
+      return false;
+    }
+    foundValue = foundValue.get(attr);
+  }
+  return foundValue !== undefined;
+}
+
+export function select(
+  theAttrset: any,
+  attrPath: string[],
+  defaultValue: any | undefined
+): any {
+  const nestingDepth = attrPath.length - 1;
+  for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
+    const attr = attrPath[nestingLevel];
+    let nestedMap = theAttrset.get(attr);
+    if (!(nestedMap instanceof Map)) {
+      theAttrset = undefined;
+      break;
+    }
+    theAttrset = nestedMap;
+  }
+
+  let foundValue = undefined;
+  if (theAttrset !== undefined) {
+    foundValue = theAttrset.get(attrPath[nestingDepth]);
+  }
+
+  if (foundValue === undefined && defaultValue === undefined) {
+    throw new EvaluationException(`Attribute '${attrPath}' is missing.`);
+  }
+
+  return foundValue === undefined ? defaultValue : foundValue;
 }
 
 export function update(lhs: any, rhs: any): Map<string, any> {
@@ -125,6 +167,35 @@ export function update(lhs: any, rhs: any): Map<string, any> {
     resultMap.set(entry[0], entry[1]);
   }
   return resultMap;
+}
+
+function _setAttrpath(
+  newAttrset: Map<string, any>,
+  attrpath: string[],
+  value: any
+) {
+  const nestingDepth = attrpath.length - 1;
+  for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
+    const attr = attrpath[nestingLevel];
+    let nestedMap = newAttrset.get(attr);
+    if (nestedMap === undefined) {
+      nestedMap = new Map<string, any>();
+      newAttrset.set(attr, nestedMap);
+    } else if (!(nestedMap instanceof Map)) {
+      throw new EvaluationException(
+        `Attribute '${attr}' is already defined, cannot set '${
+          attrpath[nestingLevel + 1]
+        }' inside.`
+      );
+    }
+    newAttrset = nestedMap;
+  }
+
+  const lastAttr = attrpath[nestingDepth];
+  if (newAttrset.has(lastAttr)) {
+    throw new EvaluationException(`Attribute '${lastAttr}' already defined.`);
+  }
+  newAttrset.set(lastAttr, value);
 }
 
 // Boolean:
@@ -358,7 +429,10 @@ export default {
   sub,
 
   // Attrset:
+  attrpath,
+  attrset,
   has,
+  select,
   update,
 
   // Boolean:
