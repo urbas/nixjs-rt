@@ -1,5 +1,5 @@
 import { expect, test } from "@jest/globals";
-import nixrt, { NixInt } from "./lib";
+import nixrt, { attrpath, attrset, NixInt } from "./lib";
 
 // Arithmetic:
 test("unary '-' operator on integers", () => {
@@ -100,35 +100,91 @@ test("'/' operator on non-numbers raises exceptions", () => {
 });
 
 // Attrset:
+test("attrset construction", () => {
+  expect(attrset()).toStrictEqual(new Map());
+  expect(attrset([attrpath("a"), 1])).toStrictEqual(new Map([["a", 1]]));
+  expect(attrset([attrpath("a", "b"), 1])).toStrictEqual(
+    new Map([["a", new Map([["b", 1]])]])
+  );
+});
+
+test("attrset construction with repeated attrs throws", () => {
+  expect(() => attrset([attrpath("a"), 1], [attrpath("a"), 1])).toThrow(
+    nixrt.EvaluationException
+  );
+  expect(() => attrset([attrpath("a"), 1], [attrpath("a", "b"), 1])).toThrow(
+    nixrt.EvaluationException
+  );
+});
+
 test("'//' operator on attrsets", () => {
-  expect(nixrt.update(new Map(), new Map())).toStrictEqual(new Map());
-  expect(nixrt.update(new Map([["a", 1]]), new Map())).toStrictEqual(
+  expect(nixrt.update(attrset(), attrset())).toStrictEqual(new Map());
+  expect(nixrt.update(attrset([attrpath("a"), 1]), attrset())).toStrictEqual(
     new Map([["a", 1]])
   );
-  expect(nixrt.update(new Map([["a", 1]]), new Map([["b", 2]]))).toStrictEqual(
+  expect(
+    nixrt.update(attrset([attrpath("a"), 1]), attrset([attrpath("b"), 2]))
+  ).toStrictEqual(
     new Map([
       ["a", 1],
       ["b", 2],
     ])
   );
-  expect(nixrt.update(new Map([["a", 1]]), new Map([["a", 2]]))).toStrictEqual(
-    new Map([["a", 2]])
-  );
+  expect(
+    nixrt.update(attrset([attrpath("a"), 1]), attrset([attrpath("a"), 2]))
+  ).toStrictEqual(new Map([["a", 2]]));
 });
 
 test("'//' operator on non-attrsets raises exceptions", () => {
-  expect(() => nixrt.and(new Map(), 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.and(1, new Map())).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(attrset(), 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(1, attrset())).toThrow(nixrt.EvaluationException);
 });
 
 test("'?' operator", () => {
-  expect(nixrt.has(new Map(), "a")).toBe(false);
-  expect(nixrt.has(new Map([["a", 1]]), "a")).toBe(true);
+  expect(nixrt.has(attrset(), attrpath("a"))).toBe(false);
+  expect(nixrt.has(attrset([attrpath("a"), 1]), attrpath("a"))).toBe(true);
+  expect(nixrt.has(attrset([attrpath("a"), 1]), attrpath("a", "b"))).toBe(
+    false
+  );
+  expect(nixrt.has(attrset([attrpath("a", "b"), 1]), attrpath("a", "b"))).toBe(
+    true
+  );
 });
 
-test("'?' operator with wrong types raises exceptions", () => {
-  expect(() => nixrt.has(new Map(), 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.has(1, "a")).toThrow(nixrt.EvaluationException);
+test("'?' operator on other types returns false", () => {
+  expect(nixrt.has(1, attrpath("a"))).toBe(false);
+  expect(nixrt.has(1, attrpath("a"))).toBe(false);
+});
+
+test("'.' operator", () => {
+  expect(
+    nixrt.select(attrset([attrpath("a"), 1]), attrpath("a"), undefined)
+  ).toBe(1);
+  expect(
+    nixrt.select(
+      attrset([attrpath("a", "b"), 1]),
+      attrpath("a", "b"),
+      undefined
+    )
+  ).toBe(1);
+  expect(nixrt.select(attrset(), attrpath("a"), 1)).toBe(1);
+  expect(
+    nixrt.select(attrset([attrpath("a", "a"), 1]), attrpath("a", "b"), 1)
+  ).toBe(1);
+
+  expect(
+    nixrt.select(
+      nixrt.attrset([nixrt.attrpath("a"), 1], [nixrt.attrpath("b", "c"), 2]),
+      nixrt.attrpath("a", "c"),
+      5
+    )
+  ).toBe(5);
+});
+
+test("'//' operator throws when attrpath doesn't exist", () => {
+  expect(() => nixrt.select(attrset(), attrpath("a"), undefined)).toThrow(
+    nixrt.EvaluationException
+  );
 });
 
 // Boolean:
