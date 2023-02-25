@@ -103,6 +103,21 @@ export function div(lhs: any, rhs: any): number | NixInt {
   return lhs / rhs;
 }
 
+// Attrset:
+export function update(lhs: any, rhs: any): Map<string, any> {
+  if (!(lhs instanceof Map) || !(rhs instanceof Map)) {
+    throw new EvaluationException(
+      `Cannot apply '//' operator on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+    );
+  }
+
+  const resultMap = new Map(lhs);
+  for (const entry of rhs) {
+    resultMap.set(entry[0], entry[1]);
+  }
+  return resultMap;
+}
+
 // Boolean:
 export function and(lhs: any, rhs: any): boolean {
   return asBooleanOperand(lhs) && asBooleanOperand(rhs);
@@ -333,13 +348,16 @@ export default {
   neg,
   sub,
 
-  // Boolean,
+  // Attrset:
+  update,
+
+  // Boolean:
   and,
   implication,
   invert,
   or,
 
-  // Comparison,
+  // Comparison:
   eq,
   more_eq,
   more,
@@ -347,7 +365,7 @@ export default {
   less,
   neq,
 
-  // List,
+  // List:
   concat,
 
   // Type functions:
