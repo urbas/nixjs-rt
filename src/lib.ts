@@ -191,6 +191,46 @@ export function neq(lhs: any, rhs: any): boolean {
 }
 
 export function less(lhs: any, rhs: any): boolean {
+  if (lhs === null || rhs === null) {
+    _throwLessThanTypeError(lhs, rhs);
+  }
+
+  const lhsType = typeof lhs;
+  const rhsType = typeof rhs;
+  if (lhsType === rhsType) {
+    return _equalTypesLess(lhs, rhs);
+  }
+
+  return _numberLess(lhs, rhs);
+}
+
+export function less_eq(lhs: any, rhs: any): boolean {
+  return !less(rhs, lhs);
+}
+
+export function more(lhs: any, rhs: any): boolean {
+  return less(rhs, lhs);
+}
+
+export function more_eq(lhs: any, rhs: any): boolean {
+  return !less(lhs, rhs);
+}
+
+function _equalTypesLess(lhs: any, rhs: any): boolean {
+  switch (typeof lhs) {
+    case "object":
+      if (Array.isArray(lhs)) {
+        return _listLess(lhs, rhs);
+      }
+      return _numberLess(lhs, rhs);
+    case "boolean":
+      _throwLessThanTypeError(lhs, rhs);
+    default:
+      return lhs < rhs;
+  }
+}
+
+function _numberLess(lhs: any, rhs: any): boolean {
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return lhs.value < rhs.value;
@@ -206,36 +246,8 @@ export function less(lhs: any, rhs: any): boolean {
     }
     return lhs < rhs.value;
   }
-  if (typeof lhs !== typeof rhs || lhs === null || rhs === null) {
-    _throwLessThanTypeError(lhs, rhs);
-  }
-  return _equalTypesLess(lhs, rhs);
-}
 
-export function less_eq(lhs: any, rhs: any): boolean {
-  return eq(lhs, rhs) || less(lhs, rhs);
-}
-
-export function more(lhs: any, rhs: any): boolean {
-  return less(rhs, lhs);
-}
-
-export function more_eq(lhs: any, rhs: any): boolean {
-  return eq(lhs, rhs) || more(lhs, rhs);
-}
-
-function _equalTypesLess(lhs: any, rhs: any): boolean {
-  switch (typeof lhs) {
-    case "object":
-      if (Array.isArray(lhs)) {
-        return _listLess(lhs, rhs);
-      }
-      _throwLessThanTypeError(lhs, rhs);
-    case "boolean":
-      _throwLessThanTypeError(lhs, rhs);
-    default:
-      return lhs < rhs;
-  }
+  _throwLessThanTypeError(lhs, rhs);
 }
 
 function _listLess(lhs: Array<any>, rhs: Array<any>): boolean {
@@ -243,6 +255,19 @@ function _listLess(lhs: Array<any>, rhs: Array<any>): boolean {
   for (let idx = 0; idx < minLen; idx++) {
     const currentLhs = lhs[idx];
     const currentRhs = rhs[idx];
+    // This special-casing for booleans and nulls replicates nix's behaviour. Some examples:
+    // - nix evaluates this: `[true] < [true] == false` rather than trowing an exception,
+    // - the same for `[false] < [false] == false`, and
+    // - the same for `[null] < [null] == false`.
+    if (
+      (currentLhs === true && currentRhs === true) ||
+      (currentLhs === false && currentRhs === false)
+    ) {
+      continue;
+    }
+    if (currentLhs === null && currentRhs === null) {
+      continue;
+    }
     if (less(currentLhs, currentRhs)) {
       return true;
     }

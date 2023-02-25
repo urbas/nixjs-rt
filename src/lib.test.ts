@@ -224,6 +224,12 @@ test("'<' operator lists", () => {
   expect(nixrt.less([1, 1], [1, 2])).toBe(true);
   expect(nixrt.less([1, true], [1])).toBe(false);
   expect(nixrt.less([new NixInt(1n)], [new NixInt(2n)])).toBe(true);
+
+  // This reproduces nix's observed behaviour
+  expect(nixrt.less([true], [true])).toBe(false);
+  expect(nixrt.less([false], [false])).toBe(false);
+  expect(nixrt.less([false, 1], [false, 2])).toBe(true);
+  expect(nixrt.less([null], [null])).toBe(false);
 });
 
 test("'<' operator list invalid", () => {
@@ -258,7 +264,7 @@ test("'>' operator", () => {
 });
 
 // List:
-test("list concatenation and", () => {
+test("'++' operator", () => {
   const list_1 = [1];
   const list_2 = [2];
   expect(nixrt.concat(list_1, list_2)).toStrictEqual([1, 2]);
@@ -267,7 +273,7 @@ test("list concatenation and", () => {
   expect(list_2).toStrictEqual([2]);
 });
 
-test("concatenating non-lists raises an exception", () => {
+test("'++' operator on non-lists raises exceptions", () => {
   expect(() => nixrt.concat([], 1)).toThrow(nixrt.EvaluationException);
   expect(() => nixrt.concat(true, [])).toThrow(nixrt.EvaluationException);
 });
