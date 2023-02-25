@@ -104,10 +104,19 @@ export function div(lhs: any, rhs: any): number | NixInt {
 }
 
 // Attrset:
+export function has(lhs: any, rhs: any): boolean {
+  if (!(lhs instanceof Map) || typeof rhs !== "string") {
+    throw new EvaluationException(
+      `Cannot apply operator '?' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+    );
+  }
+  return lhs.has(rhs);
+}
+
 export function update(lhs: any, rhs: any): Map<string, any> {
   if (!(lhs instanceof Map) || !(rhs instanceof Map)) {
     throw new EvaluationException(
-      `Cannot apply '//' operator on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+      `Cannot apply operator '//' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
 
@@ -349,6 +358,7 @@ export default {
   sub,
 
   // Attrset:
+  has,
   update,
 
   // Boolean:

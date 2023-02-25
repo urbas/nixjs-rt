@@ -121,6 +121,16 @@ test("'//' operator on non-attrsets raises exceptions", () => {
   expect(() => nixrt.and(1, new Map())).toThrow(nixrt.EvaluationException);
 });
 
+test("'?' operator", () => {
+  expect(nixrt.has(new Map(), "a")).toBe(false);
+  expect(nixrt.has(new Map([["a", 1]]), "a")).toBe(true);
+});
+
+test("'?' operator with wrong types raises exceptions", () => {
+  expect(() => nixrt.has(new Map(), 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.has(1, "a")).toThrow(nixrt.EvaluationException);
+});
+
 // Boolean:
 test("'&&' operator on booleans", () => {
   expect(nixrt.and(true, false)).toBe(false);
