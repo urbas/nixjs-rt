@@ -99,6 +99,28 @@ test("'/' operator on non-numbers raises exceptions", () => {
   );
 });
 
+// Attrset:
+test("'//' operator on attrsets", () => {
+  expect(nixrt.update(new Map(), new Map())).toStrictEqual(new Map());
+  expect(nixrt.update(new Map([["a", 1]]), new Map())).toStrictEqual(
+    new Map([["a", 1]])
+  );
+  expect(nixrt.update(new Map([["a", 1]]), new Map([["b", 2]]))).toStrictEqual(
+    new Map([
+      ["a", 1],
+      ["b", 2],
+    ])
+  );
+  expect(nixrt.update(new Map([["a", 1]]), new Map([["a", 2]]))).toStrictEqual(
+    new Map([["a", 2]])
+  );
+});
+
+test("'//' operator on non-attrsets raises exceptions", () => {
+  expect(() => nixrt.and(new Map(), 1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(1, new Map())).toThrow(nixrt.EvaluationException);
+});
+
 // Boolean:
 test("'&&' operator on booleans", () => {
   expect(nixrt.and(true, false)).toBe(false);
