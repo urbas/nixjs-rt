@@ -1,4 +1,12 @@
 // Types:
+export class Lambda {
+  body: any;
+
+  constructor(body: any) {
+    this.body = body;
+  }
+}
+
 export class NixInt {
   value: BigInt64Array;
 
@@ -376,6 +384,18 @@ function _throwLessThanTypeError(lhs: any, rhs: any): void {
   );
 }
 
+// Lambda:
+export function apply(lambda: any, argument: any): any {
+  if (!(lambda instanceof Lambda)) {
+    throw new EvaluationException(
+      `Attempt to call something which is not a function but '${typeOf(
+        lambda
+      )}'.`
+    );
+  }
+  return lambda.body;
+}
+
 // List:
 export function concat(lhs: any, rhs: any): Array<any> {
   if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
@@ -419,6 +439,7 @@ function isNumber(object: any): boolean {
 export default {
   // Types:
   EvaluationException,
+  Lambda,
   NixInt,
 
   // Arithmetic:
@@ -448,6 +469,9 @@ export default {
   less_eq,
   less,
   neq,
+
+  // Lambda:
+  apply,
 
   // List:
   concat,

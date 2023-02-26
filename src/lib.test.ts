@@ -1,5 +1,5 @@
 import { expect, test } from "@jest/globals";
-import nixrt, { attrpath, attrset, NixInt } from "./lib";
+import nixrt, { attrpath, attrset, Lambda, NixInt } from "./lib";
 
 // Arithmetic:
 test("unary '-' operator on integers", () => {
@@ -349,6 +349,15 @@ test("'>' operator", () => {
   expect(nixrt.more(1, 0)).toBe(true);
   expect(nixrt.more(1, 1)).toBe(false);
   expect(nixrt.more(1, 2)).toBe(false);
+});
+
+// Lambda:
+test("application of lambdas not using parameters", () => {
+  expect(nixrt.apply(new Lambda(1), 2)).toBe(1);
+});
+
+test("application of non-lambdas throws", () => {
+  expect(() => nixrt.apply(1, 2)).toThrow(nixrt.EvaluationException);
 });
 
 // List:
