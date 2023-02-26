@@ -375,6 +375,12 @@ test("'++' operator on non-lists raises exceptions", () => {
   expect(() => nixrt.concat(true, [])).toThrow(nixrt.EvaluationException);
 });
 
+// String:
+test("string interpolation on non-stringy values raises exceptions", () => {
+  expect(() => nixrt.interpolate(1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.interpolate(true)).toThrow(nixrt.EvaluationException);
+});
+
 // Type functions:
 test("typeOf", () => {
   expect(nixrt.typeOf(new NixInt(1n))).toBe("int");

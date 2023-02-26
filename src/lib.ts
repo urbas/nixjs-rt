@@ -406,6 +406,16 @@ export function concat(lhs: any, rhs: any): Array<any> {
   return lhs.concat(rhs);
 }
 
+// String:
+export function interpolate(value: any): string {
+  if (typeof value !== "string") {
+    throw new EvaluationException(
+      `Cannot coerce '${typeOf(value)}' to a string.`
+    );
+  }
+  return value;
+}
+
 // Type functions:
 export function typeOf(object: any): string {
   const object_type = typeof object;
@@ -475,6 +485,9 @@ export default {
 
   // List:
   concat,
+
+  // String:
+  interpolate,
 
   // Type functions:
   typeOf,
