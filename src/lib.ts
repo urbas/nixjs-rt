@@ -113,6 +113,16 @@ export function div(lhs: any, rhs: any): number | NixInt {
 
 // Attrset:
 export function attrpath(...attrs: any[]): string[] {
+  const invalidAttrSegment = attrs.find(
+    (attrSegment) => attrSegment !== null && typeof attrSegment !== "string"
+  );
+  if (invalidAttrSegment !== undefined) {
+    throw new EvaluationException(
+      `Attribute name is of type '${typeOf(
+        invalidAttrSegment
+      )}' but a string was expected.`
+    );
+  }
   return attrs;
 }
 
@@ -185,13 +195,16 @@ function _setAttrpath(
   const nestingDepth = attrpath.length - 1;
   for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
     const attr = attrpath[nestingLevel];
+    if (attr === null) {
+      return;
+    }
     let nestedMap = newAttrset.get(attr);
     if (nestedMap === undefined) {
       nestedMap = new Map<string, any>();
       newAttrset.set(attr, nestedMap);
     } else if (!(nestedMap instanceof Map)) {
       throw new EvaluationException(
-        `Attribute '${attr}' is already defined, cannot set '${
+        `Attribute '${attr}' is already defined and is not a attrset. Cannot set '${
           attrpath[nestingLevel + 1]
         }' inside.`
       );
@@ -200,6 +213,9 @@ function _setAttrpath(
   }
 
   const lastAttr = attrpath[nestingDepth];
+  if (lastAttr === null) {
+    return;
+  }
   if (newAttrset.has(lastAttr)) {
     throw new EvaluationException(`Attribute '${lastAttr}' already defined.`);
   }
