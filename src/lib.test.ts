@@ -108,6 +108,14 @@ test("attrset construction", () => {
   );
 });
 
+test("attrsets ignore null attrs", () => {
+  expect(attrset([attrpath(null, "a"), 1])).toStrictEqual(new Map());
+  expect(attrset([attrpath(null), 1])).toStrictEqual(new Map());
+  expect(attrset([attrpath("a", null), 1])).toStrictEqual(
+    new Map([["a", new Map()]])
+  );
+});
+
 test("attrset construction with repeated attrs throws", () => {
   expect(() => attrset([attrpath("a"), 1], [attrpath("a"), 1])).toThrow(
     nixrt.EvaluationException
@@ -115,6 +123,10 @@ test("attrset construction with repeated attrs throws", () => {
   expect(() => attrset([attrpath("a"), 1], [attrpath("a", "b"), 1])).toThrow(
     nixrt.EvaluationException
   );
+});
+
+test("attrset with non-string attrs throw", () => {
+  expect(() => attrset([attrpath(1), 1])).toThrow(nixrt.EvaluationException);
 });
 
 test("'//' operator on attrsets", () => {
