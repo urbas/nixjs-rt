@@ -1,6 +1,28 @@
 // Types:
+export interface Builtins {
+  isAbsolutePath(path: string): boolean;
+  joinPaths(base: string, path: string): string;
+}
+
+export class EvalException extends Error {
+  readonly message: string;
+
+  constructor(message: string) {
+    super();
+    this.message = message;
+  }
+}
+
+export interface EvalCtx {
+  readonly builtins: Builtins;
+  /**
+   * The absolute resolved path of the directory of the script that's currently being executed.
+   */
+  readonly scriptDir: string;
+}
+
 export class Lambda {
-  body: any;
+  readonly body: any;
 
   constructor(body: any) {
     this.body = body;
@@ -8,7 +30,7 @@ export class Lambda {
 }
 
 export class NixInt {
-  value: BigInt64Array;
+  readonly value: BigInt64Array;
 
   constructor(value: bigint) {
     this.value = new BigInt64Array(1);
@@ -25,26 +47,17 @@ export class NixInt {
 }
 
 export class Path {
-  path: string;
+  readonly path: string;
 
   constructor(path: string) {
     this.path = path;
   }
 }
 
-export class EvaluationException extends Error {
-  message: string;
-
-  constructor(message: string) {
-    super();
-    this.message = message;
-  }
-}
-
 // Arithmetic:
 export function neg(operand: any): any {
   if (!isNumber(operand)) {
-    throw new EvaluationException(`Cannot negate '${typeOf(operand)}'.`);
+    throw new EvalException(`Cannot negate '${typeOf(operand)}'.`);
   }
   if (operand instanceof NixInt) {
     return new NixInt(-operand.value[0]);
@@ -67,7 +80,7 @@ export function add(lhs: any, rhs: any): any {
 
 export function sub(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(lhs)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Cannot subtract '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
@@ -85,7 +98,7 @@ export function sub(lhs: any, rhs: any): number | NixInt {
 
 export function mul(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Cannot multiply '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
@@ -103,7 +116,7 @@ export function mul(lhs: any, rhs: any): number | NixInt {
 
 export function div(lhs: any, rhs: any): number | NixInt {
   if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Cannot divide '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
@@ -125,7 +138,7 @@ export function attrpath(...attrs: any[]): string[] {
     (attrSegment) => attrSegment !== null && typeof attrSegment !== "string"
   );
   if (invalidAttrSegment !== undefined) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Attribute name is of type '${typeOf(
         invalidAttrSegment
       )}' but a string was expected.`
@@ -175,7 +188,7 @@ export function select(
   }
 
   if (foundValue === undefined && defaultValue === undefined) {
-    throw new EvaluationException(`Attribute '${attrPath}' is missing.`);
+    throw new EvalException(`Attribute '${attrPath}' is missing.`);
   }
 
   return foundValue === undefined ? defaultValue : foundValue;
@@ -183,7 +196,7 @@ export function select(
 
 export function update(lhs: any, rhs: any): Map<string, any> {
   if (!(lhs instanceof Map) || !(rhs instanceof Map)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Cannot apply operator '//' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
@@ -211,7 +224,7 @@ function _setAttrpath(
       nestedMap = new Map<string, any>();
       newAttrset.set(attr, nestedMap);
     } else if (!(nestedMap instanceof Map)) {
-      throw new EvaluationException(
+      throw new EvalException(
         `Attribute '${attr}' is already defined and is not a attrset. Cannot set '${
           attrpath[nestingLevel + 1]
         }' inside.`
@@ -225,7 +238,7 @@ function _setAttrpath(
     return;
   }
   if (newAttrset.has(lastAttr)) {
-    throw new EvaluationException(`Attribute '${lastAttr}' already defined.`);
+    throw new EvalException(`Attribute '${lastAttr}' already defined.`);
   }
   newAttrset.set(lastAttr, value);
 }
@@ -249,7 +262,7 @@ export function or(lhs: any, rhs: any): boolean {
 
 function asBooleanOperand(operand: any): boolean {
   if (typeof operand !== "boolean") {
-    throw new EvaluationException(
+    throw new EvalException(
       `Value is '${typeOf(operand)}' but a boolean was expected.`
     );
   }
@@ -403,7 +416,7 @@ function _listLess(lhs: Array<any>, rhs: Array<any>): boolean {
 }
 
 function _throwLessThanTypeError(lhs: any, rhs: any): void {
-  throw new EvaluationException(
+  throw new EvalException(
     `Cannot compare '${typeOf(lhs)}' with '${typeOf(rhs)}'.`
   );
 }
@@ -411,7 +424,7 @@ function _throwLessThanTypeError(lhs: any, rhs: any): void {
 // Lambda:
 export function apply(lambda: any, argument: any): any {
   if (!(lambda instanceof Lambda)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Attempt to call something which is not a function but '${typeOf(
         lambda
       )}'.`
@@ -423,19 +436,25 @@ export function apply(lambda: any, argument: any): any {
 // List:
 export function concat(lhs: any, rhs: any): Array<any> {
   if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
-    throw new EvaluationException(
+    throw new EvalException(
       `Cannot concatenate '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
     );
   }
   return lhs.concat(rhs);
 }
 
+// List:
+export function toPath(evalCtx: EvalCtx, path: string): Path {
+  if (evalCtx.builtins.isAbsolutePath(path)) {
+    return new Path(path);
+  }
+  return new Path(evalCtx.builtins.joinPaths(evalCtx.scriptDir, path));
+}
+
 // String:
 export function interpolate(value: any): string {
   if (typeof value !== "string") {
-    throw new EvaluationException(
-      `Cannot coerce '${typeOf(value)}' to a string.`
-    );
+    throw new EvalException(`Cannot coerce '${typeOf(value)}' to a string.`);
   }
   return value;
 }
@@ -472,7 +491,7 @@ function isNumber(object: any): boolean {
 
 export default {
   // Types:
-  EvaluationException,
+  EvalException,
   Lambda,
   NixInt,
   Path,
@@ -510,6 +529,9 @@ export default {
 
   // List:
   concat,
+
+  // List:
+  toPath,
 
   // String:
   interpolate,

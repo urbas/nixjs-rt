@@ -1,5 +1,13 @@
-import { expect, test } from "@jest/globals";
-import nixrt, { attrpath, attrset, Lambda, NixInt } from "./lib";
+import { expect, jest, test } from "@jest/globals";
+import nixrt, {
+  attrpath,
+  attrset,
+  Builtins,
+  EvalCtx,
+  Lambda,
+  NixInt,
+  Path,
+} from "./lib";
 
 // Arithmetic:
 test("unary '-' operator on integers", () => {
@@ -12,7 +20,7 @@ test("unary '-' operator on floats", () => {
 });
 
 test("unary '-' operator on non-numbers", () => {
-  expect(() => nixrt.neg("a")).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.neg("a")).toThrow(nixrt.EvalException);
 });
 
 test("'+' operator on integers", () => {
@@ -51,8 +59,8 @@ test("'-' operator on mixed integers and floats", () => {
 });
 
 test("'-' operator on non-numbers raises exceptions", () => {
-  expect(() => nixrt.sub("foo", 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.mul(1, "foo")).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.sub("foo", 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.mul(1, "foo")).toThrow(nixrt.EvalException);
 });
 
 test("'*' operator on integers", () => {
@@ -70,11 +78,9 @@ test("'*' operator on mixed integers and floats", () => {
 });
 
 test("'*' operator on non-numbers raises exceptions", () => {
-  expect(() => nixrt.mul("foo", "bar")).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.mul("foo", 1.5)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.mul("foo", new NixInt(1n))).toThrow(
-    nixrt.EvaluationException
-  );
+  expect(() => nixrt.mul("foo", "bar")).toThrow(nixrt.EvalException);
+  expect(() => nixrt.mul("foo", 1.5)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.mul("foo", new NixInt(1n))).toThrow(nixrt.EvalException);
 });
 
 test("'/' operator on integers", () => {
@@ -92,11 +98,9 @@ test("'/' operator on mixed integers and floats", () => {
 });
 
 test("'/' operator on non-numbers raises exceptions", () => {
-  expect(() => nixrt.div("foo", "bar")).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.div("foo", 1.5)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.div("foo", new NixInt(1n))).toThrow(
-    nixrt.EvaluationException
-  );
+  expect(() => nixrt.div("foo", "bar")).toThrow(nixrt.EvalException);
+  expect(() => nixrt.div("foo", 1.5)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.div("foo", new NixInt(1n))).toThrow(nixrt.EvalException);
 });
 
 // Attrset:
@@ -118,15 +122,15 @@ test("attrsets ignore null attrs", () => {
 
 test("attrset construction with repeated attrs throws", () => {
   expect(() => attrset([attrpath("a"), 1], [attrpath("a"), 1])).toThrow(
-    nixrt.EvaluationException
+    nixrt.EvalException
   );
   expect(() => attrset([attrpath("a"), 1], [attrpath("a", "b"), 1])).toThrow(
-    nixrt.EvaluationException
+    nixrt.EvalException
   );
 });
 
 test("attrset with non-string attrs throw", () => {
-  expect(() => attrset([attrpath(1), 1])).toThrow(nixrt.EvaluationException);
+  expect(() => attrset([attrpath(1), 1])).toThrow(nixrt.EvalException);
 });
 
 test("'//' operator on attrsets", () => {
@@ -148,8 +152,8 @@ test("'//' operator on attrsets", () => {
 });
 
 test("'//' operator on non-attrsets raises exceptions", () => {
-  expect(() => nixrt.and(attrset(), 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.and(1, attrset())).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(attrset(), 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.and(1, attrset())).toThrow(nixrt.EvalException);
 });
 
 test("'?' operator", () => {
@@ -195,7 +199,7 @@ test("'.' operator", () => {
 
 test("'//' operator throws when attrpath doesn't exist", () => {
   expect(() => nixrt.select(attrset(), attrpath("a"), undefined)).toThrow(
-    nixrt.EvaluationException
+    nixrt.EvalException
   );
 });
 
@@ -206,8 +210,8 @@ test("'&&' operator on booleans", () => {
 });
 
 test("'&&' operator on non-booleans raises exceptions", () => {
-  expect(() => nixrt.and(true, 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.and(1, true)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.and(true, 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.and(1, true)).toThrow(nixrt.EvalException);
 });
 
 test("'->' operator on booleans", () => {
@@ -216,8 +220,8 @@ test("'->' operator on booleans", () => {
 });
 
 test("'->' operator on non-booleans raises exceptions", () => {
-  expect(() => nixrt.implication(true, 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.implication(1, true)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.implication(true, 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.implication(1, true)).toThrow(nixrt.EvalException);
 });
 
 test("'!' operator on booleans", () => {
@@ -225,7 +229,7 @@ test("'!' operator on booleans", () => {
 });
 
 test("'!' operator on non-booleans raises exceptions", () => {
-  expect(() => nixrt.invert(1)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.invert(1)).toThrow(nixrt.EvalException);
 });
 
 test("'||' operator on booleans", () => {
@@ -234,8 +238,8 @@ test("'||' operator on booleans", () => {
 });
 
 test("'||' operator on non-booleans raises exceptions", () => {
-  expect(() => nixrt.or(false, 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.or(1, true)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.or(false, 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.or(1, true)).toThrow(nixrt.EvalException);
 });
 
 // Comparison:
@@ -293,13 +297,9 @@ test("'<' operator on numbers", () => {
 });
 
 test("'<' operator on mixed-types throws", () => {
-  expect(() => nixrt.less(new NixInt(1n), true)).toThrow(
-    nixrt.EvaluationException
-  );
-  expect(() => nixrt.less(true, new NixInt(1n))).toThrow(
-    nixrt.EvaluationException
-  );
-  expect(() => nixrt.less(true, 1.0)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.less(new NixInt(1n), true)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.less(true, new NixInt(1n))).toThrow(nixrt.EvalException);
+  expect(() => nixrt.less(true, 1.0)).toThrow(nixrt.EvalException);
 });
 
 test("'<' operator on strings", () => {
@@ -308,11 +308,11 @@ test("'<' operator on strings", () => {
 });
 
 test("'<' operator on booleans throws", () => {
-  expect(() => nixrt.less(false, true)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.less(false, true)).toThrow(nixrt.EvalException);
 });
 
 test("'<' operator on null vlaues throws", () => {
-  expect(() => nixrt.less(null, null)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.less(null, null)).toThrow(nixrt.EvalException);
 });
 
 test("'<' operator lists", () => {
@@ -333,8 +333,8 @@ test("'<' operator lists", () => {
 });
 
 test("'<' operator list invalid", () => {
-  expect(() => nixrt.less([true], [1])).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.less([true], [false])).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.less([true], [1])).toThrow(nixrt.EvalException);
+  expect(() => nixrt.less([true], [false])).toThrow(nixrt.EvalException);
 });
 
 test("'<=' operator", () => {
@@ -369,7 +369,7 @@ test("application of lambdas not using parameters", () => {
 });
 
 test("application of non-lambdas throws", () => {
-  expect(() => nixrt.apply(1, 2)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.apply(1, 2)).toThrow(nixrt.EvalException);
 });
 
 // List:
@@ -383,14 +383,29 @@ test("'++' operator", () => {
 });
 
 test("'++' operator on non-lists raises exceptions", () => {
-  expect(() => nixrt.concat([], 1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.concat(true, [])).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.concat([], 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.concat(true, [])).toThrow(nixrt.EvalException);
+});
+
+// Path:
+test("toPath does not transform absolute paths", () => {
+  const evalCtx = createMockEvalCtx();
+  evalCtx.builtins.isAbsolutePath.mockReturnValueOnce(true);
+  expect(nixrt.toPath(evalCtx, "foo")).toStrictEqual(new Path("foo"));
+});
+
+test("toPath transforms relative paths with 'joinPaths'", () => {
+  const evalCtx = createMockEvalCtx();
+  evalCtx.builtins.isAbsolutePath.mockReturnValueOnce(false);
+  expect(nixrt.toPath(evalCtx, "foo")).toStrictEqual(
+    new Path("/test/script_dir/foo")
+  );
 });
 
 // String:
 test("string interpolation on non-stringy values raises exceptions", () => {
-  expect(() => nixrt.interpolate(1)).toThrow(nixrt.EvaluationException);
-  expect(() => nixrt.interpolate(true)).toThrow(nixrt.EvaluationException);
+  expect(() => nixrt.interpolate(1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.interpolate(true)).toThrow(nixrt.EvalException);
 });
 
 // Type functions:
@@ -404,3 +419,17 @@ test("typeOf", () => {
   expect(nixrt.typeOf(new Map())).toBe("set");
   // TODO: cover other Nix types
 });
+
+function createMockEvalCtx() {
+  return {
+    builtins: createMockBuiltins(),
+    scriptDir: "/test/script_dir",
+  };
+}
+
+function createMockBuiltins() {
+  return {
+    isAbsolutePath: jest.fn((path: string) => undefined),
+    joinPaths: jest.fn((base, path) => `${base}/${path}`),
+  };
+}
