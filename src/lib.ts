@@ -24,6 +24,14 @@ export class NixInt {
   }
 }
 
+export class Path {
+  path: string;
+
+  constructor(path: string) {
+    this.path = path;
+  }
+}
+
 export class EvaluationException extends Error {
   message: string;
 
@@ -467,6 +475,7 @@ export default {
   EvaluationException,
   Lambda,
   NixInt,
+  Path,
 
   // Arithmetic:
   add,
