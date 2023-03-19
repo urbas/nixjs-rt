@@ -278,22 +278,22 @@ function _setAttrpath(
 
 // Boolean:
 export function and(lhs: any, rhs: any): boolean {
-  return asBooleanOperand(lhs) && asBooleanOperand(rhs);
+  return asBoolean(lhs) && asBoolean(rhs);
 }
 
 export function implication(lhs: any, rhs: any): boolean {
-  return !asBooleanOperand(lhs) || asBooleanOperand(rhs);
+  return !asBoolean(lhs) || asBoolean(rhs);
 }
 
 export function invert(operand: any): boolean {
-  return !asBooleanOperand(operand);
+  return !asBoolean(operand);
 }
 
 export function or(lhs: any, rhs: any): boolean {
-  return asBooleanOperand(lhs) || asBooleanOperand(rhs);
+  return asBoolean(lhs) || asBoolean(rhs);
 }
 
-function asBooleanOperand(operand: any): boolean {
+export function asBoolean(operand: any): boolean {
   if (typeof operand !== "boolean") {
     throw new EvalException(
       `Value is '${typeOf(operand)}' but a boolean was expected.`
@@ -574,6 +574,7 @@ export default {
 
   // Boolean:
   and,
+  asBoolean,
   implication,
   invert,
   or,
