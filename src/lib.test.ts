@@ -1,13 +1,11 @@
-import { expect, jest, test } from "@jest/globals";
-import nixrt, {
-  attrpath,
-  attrset,
-  Builtins,
-  EvalCtx,
-  Lambda,
-  NixInt,
-  Path,
-} from "./lib";
+import { beforeEach, expect, test } from "@jest/globals";
+import nixrt, { attrpath, attrset, EvalCtx, Lambda, NixInt, Path } from "./lib";
+
+let evalCtx: EvalCtx;
+
+beforeEach(() => {
+  evalCtx = createMockEvalCtx();
+});
 
 // Arithmetic:
 test("unary '-' operator on integers", () => {
@@ -24,10 +22,13 @@ test("unary '-' operator on non-numbers", () => {
 });
 
 test("'+' operator on integers", () => {
-  expect((nixrt.add(new NixInt(1n), new NixInt(2n)) as NixInt).number).toBe(3);
+  expect(
+    (nixrt.add(evalCtx, new NixInt(1n), new NixInt(2n)) as NixInt).number
+  ).toBe(3);
   expect(
     (
       nixrt.add(
+        evalCtx,
         new NixInt(4611686018427387904n),
         new NixInt(4611686018427387904n)
       ) as NixInt
@@ -36,12 +37,45 @@ test("'+' operator on integers", () => {
 });
 
 test("'+' operator on floats", () => {
-  expect(nixrt.add(1.0, 2.0)).toBe(3);
+  expect(nixrt.add(evalCtx, 1.0, 2.0)).toBe(3);
 });
 
 test("'+' operator on mixed integers and floats", () => {
-  expect(nixrt.add(new NixInt(1n), 2.0)).toBe(3.0);
-  expect(nixrt.add(2.0, new NixInt(1n))).toBe(3.0);
+  expect(nixrt.add(evalCtx, new NixInt(1n), 2.0)).toBe(3.0);
+  expect(nixrt.add(evalCtx, 2.0, new NixInt(1n))).toBe(3.0);
+});
+
+test("'+' operator on mixed numbers and non-numbers", () => {
+  expect(() => nixrt.add(evalCtx, "a", new NixInt(1n))).toThrow(
+    nixrt.EvalException
+  );
+  expect(() => nixrt.add(evalCtx, new NixInt(1n), "a")).toThrow(
+    nixrt.EvalException
+  );
+  expect(() => nixrt.add(evalCtx, 1, "a")).toThrow(nixrt.EvalException);
+  expect(() => nixrt.add(evalCtx, "a", 1)).toThrow(nixrt.EvalException);
+});
+
+test("'+' operator on strings", () => {
+  expect(nixrt.add(evalCtx, "a", "b")).toBe("ab");
+});
+
+test("'+' operator on paths and strings", () => {
+  expect(nixrt.add(evalCtx, new Path("/"), "b")).toStrictEqual(new Path("/b"));
+  expect(nixrt.add(evalCtx, new Path("/a"), "b")).toStrictEqual(
+    new Path("/ab")
+  );
+  expect(nixrt.add(evalCtx, new Path("/"), "/")).toStrictEqual(new Path("/"));
+  expect(nixrt.add(evalCtx, new Path("/"), ".")).toStrictEqual(new Path("/"));
+  expect(nixrt.add(evalCtx, new Path("/"), "./a")).toStrictEqual(
+    new Path("/a")
+  );
+});
+
+test("'+' operator on paths", () => {
+  expect(nixrt.add(evalCtx, new Path("/"), new Path("/a"))).toStrictEqual(
+    new Path("/a")
+  );
 });
 
 test("'-' operator on integers", () => {
@@ -388,18 +422,14 @@ test("'++' operator on non-lists raises exceptions", () => {
 });
 
 // Path:
-test("toPath does not transform absolute paths", () => {
-  const evalCtx = createMockEvalCtx();
-  evalCtx.builtins.isAbsolutePath.mockReturnValueOnce(true);
-  expect(nixrt.toPath(evalCtx, "foo")).toStrictEqual(new Path("foo"));
+test("toPath on absolute paths", () => {
+  expect(nixrt.toPath(evalCtx, "/a")).toStrictEqual(new Path("/a"));
+  expect(nixrt.toPath(evalCtx, "/./a/../b")).toStrictEqual(new Path("/b"));
+  expect(nixrt.toPath(evalCtx, "//./a//..///b/")).toStrictEqual(new Path("/b"));
 });
 
 test("toPath transforms relative paths with 'joinPaths'", () => {
-  const evalCtx = createMockEvalCtx();
-  evalCtx.builtins.isAbsolutePath.mockReturnValueOnce(false);
-  expect(nixrt.toPath(evalCtx, "foo")).toStrictEqual(
-    new Path("/test/script_dir/foo")
-  );
+  expect(nixrt.toPath(evalCtx, "a")).toStrictEqual(new Path("/test_base/a"));
 });
 
 // String:
@@ -417,19 +447,12 @@ test("typeOf", () => {
   expect(nixrt.typeOf(null)).toBe("null");
   expect(nixrt.typeOf([1, 2])).toBe("list");
   expect(nixrt.typeOf(new Map())).toBe("set");
+  expect(nixrt.typeOf(new Path("/"))).toBe("path");
   // TODO: cover other Nix types
 });
 
 function createMockEvalCtx() {
   return {
-    builtins: createMockBuiltins(),
-    scriptDir: "/test/script_dir",
-  };
-}
-
-function createMockBuiltins() {
-  return {
-    isAbsolutePath: jest.fn((path: string) => undefined),
-    joinPaths: jest.fn((base, path) => `${base}/${path}`),
+    scriptDir: "/test_base",
   };
 }

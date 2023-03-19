@@ -1,7 +1,6 @@
 // Types:
-export interface Builtins {
-  isAbsolutePath(path: string): boolean;
-  joinPaths(base: string, path: string): string;
+export abstract class NixType {
+  abstract typeOf(): string;
 }
 
 export class EvalException extends Error {
@@ -14,7 +13,6 @@ export class EvalException extends Error {
 }
 
 export interface EvalCtx {
-  readonly builtins: Builtins;
   /**
    * The absolute resolved path of the directory of the script that's currently being executed.
    */
@@ -29,12 +27,17 @@ export class Lambda {
   }
 }
 
-export class NixInt {
+export class NixInt extends NixType {
   readonly value: BigInt64Array;
 
   constructor(value: bigint) {
+    super();
     this.value = new BigInt64Array(1);
     this.value[0] = value;
+  }
+
+  typeOf(): string {
+    return "int";
   }
 
   get number(): number {
@@ -46,11 +49,16 @@ export class NixInt {
   }
 }
 
-export class Path {
+export class Path extends NixType {
   readonly path: string;
 
   constructor(path: string) {
+    super();
     this.path = path;
+  }
+
+  typeOf(): string {
+    return "path";
   }
 }
 
@@ -65,17 +73,42 @@ export function neg(operand: any): any {
   return -operand;
 }
 
-export function add(lhs: any, rhs: any): any {
+export function add(evalCtx: EvalCtx, lhs: any, rhs: any): any {
+  switch (typeof lhs) {
+    case "number":
+      if (typeof rhs === "number") return lhs + rhs;
+      if (rhs instanceof NixInt) return lhs + rhs.number;
+      throw new EvalException(illegalAddMsg(lhs, rhs));
+    case "string":
+      if (typeof rhs === "string") return lhs + rhs;
+      // TODO: allow coercing 'Path' to string
+      throw new EvalException(illegalAddMsg(lhs, rhs));
+    case "object":
+      return addObjectWith(evalCtx, lhs, rhs);
+  }
+  throw new EvalException(illegalAddMsg(lhs, rhs));
+}
+
+function addObjectWith(evalCtx: EvalCtx, lhs: object, rhs: any): any {
   if (lhs instanceof NixInt) {
     if (rhs instanceof NixInt) {
       return new NixInt(lhs.int64 + rhs.int64);
     }
+    if (!isNumber(rhs)) {
+      throw new EvalException(illegalAddMsg(lhs, rhs));
+    }
     return lhs.number + rhs;
   }
-  if (rhs instanceof NixInt) {
-    return lhs + rhs.number;
+  if (lhs instanceof Path) {
+    if (typeof rhs === "string") return toPath(evalCtx, lhs.path + rhs);
+    if (rhs instanceof Path)
+      return toPath(evalCtx, joinPaths(lhs.path, rhs.path));
   }
-  return lhs + rhs;
+  throw new EvalException(illegalAddMsg(lhs, rhs));
+}
+
+function illegalAddMsg(lhs: any, rhs: any) {
+  return `Cannot add '${typeOf(lhs)}' to '${typeOf(rhs)}'.`;
 }
 
 export function sub(lhs: any, rhs: any): number | NixInt {
@@ -445,10 +478,10 @@ export function concat(lhs: any, rhs: any): Array<any> {
 
 // List:
 export function toPath(evalCtx: EvalCtx, path: string): Path {
-  if (evalCtx.builtins.isAbsolutePath(path)) {
-    return new Path(path);
+  if (!isAbsolutePath(path)) {
+    path = joinPaths(evalCtx.scriptDir, path);
   }
-  return new Path(evalCtx.builtins.joinPaths(evalCtx.scriptDir, path));
+  return new Path(normalizePath(path));
 }
 
 // String:
@@ -474,19 +507,48 @@ export function typeOf(object: any): string {
       if (object instanceof Map) {
         return "set";
       }
-      if (object instanceof NixInt) {
-        return "int";
-      }
       if (Array.isArray(object)) {
         return "list";
+      }
+      if (object instanceof NixType) {
+        return object.typeOf();
       }
     default:
       return object_type;
   }
 }
 
+// Utilities:
 function isNumber(object: any): boolean {
   return typeof object === "number" || object instanceof NixInt;
+}
+
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith("/");
+}
+
+function joinPaths(abs_base: string, path: string): string {
+  return `${abs_base}/${path}`;
+}
+
+function normalizePath(path: string): string {
+  let segments = path.split("/");
+  let normalizedSegments = new Array();
+  for (const segment of segments) {
+    switch (segment) {
+      case "":
+        break;
+      case ".":
+        break;
+      case "..":
+        normalizedSegments.pop();
+        break;
+      default:
+        normalizedSegments.push(segment);
+        break;
+    }
+  }
+  return (isAbsolutePath(path) ? "/" : "") + normalizedSegments.join("/");
 }
 
 export default {
