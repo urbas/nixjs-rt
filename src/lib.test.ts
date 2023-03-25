@@ -1,10 +1,10 @@
 import { beforeEach, expect, test } from "@jest/globals";
-import nixrt, { attrpath, attrset, EvalCtx, Lambda, NixInt, Path } from "./lib";
+import nixrt, { attrpath, attrset, EvalCtx, NixInt, Path } from "./lib";
 
 let evalCtx: EvalCtx;
 
 beforeEach(() => {
-  evalCtx = createMockEvalCtx();
+  evalCtx = testEvalCtx();
 });
 
 // Arithmetic:
@@ -398,12 +398,10 @@ test("'>' operator", () => {
 });
 
 // Lambda:
-test("application of lambdas not using parameters", () => {
-  expect(nixrt.apply(new Lambda(1), 2)).toBe(1);
-});
-
-test("application of non-lambdas throws", () => {
-  expect(() => nixrt.apply(1, 2)).toThrow(nixrt.EvalException);
+test("parameter lambda", () => {
+  expect(
+    nixrt.paramLambda(evalCtx, "foo", (evalCtx) => evalCtx.lookup("foo"))(42)
+  ).toBe(42);
 });
 
 // List:
@@ -432,6 +430,17 @@ test("toPath transforms relative paths with 'joinPaths'", () => {
   expect(nixrt.toPath(evalCtx, "a")).toStrictEqual(new Path("/test_base/a"));
 });
 
+// Scope:
+test("variable not in global scope", () => {
+  expect(() => evalCtx.lookup("foo")).toThrow(nixrt.EvalException);
+});
+
+test("variable in shadowing scope", () => {
+  expect(evalCtx.withShadowingScope(new Map([["foo", 1]])).lookup("foo")).toBe(
+    1
+  );
+});
+
 // String:
 test("string interpolation on non-stringy values raises exceptions", () => {
   expect(() => nixrt.interpolate(1)).toThrow(nixrt.EvalException);
@@ -451,8 +460,6 @@ test("typeOf", () => {
   // TODO: cover other Nix types
 });
 
-function createMockEvalCtx() {
-  return {
-    scriptDir: "/test_base",
-  };
+function testEvalCtx() {
+  return new EvalCtx("/test_base");
 }

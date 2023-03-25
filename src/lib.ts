@@ -1,8 +1,4 @@
 // Types:
-export abstract class NixType {
-  abstract typeOf(): string;
-}
-
 export class EvalException extends Error {
   readonly message: string;
 
@@ -12,19 +8,58 @@ export class EvalException extends Error {
   }
 }
 
-export interface EvalCtx {
+interface Scope {
+  lookup(name: string): any;
+}
+
+class GlobalScope implements Scope {
+  lookup(name: string) {
+    throw new EvalException(`Could not find variable '${name}'.`);
+  }
+}
+
+class ShadowingScope implements Scope {
+  readonly lookupTable: Map<string, any>;
+  readonly parentScope: Scope;
+
+  constructor(parentScope: Scope, lookupTable: Map<string, any>) {
+    this.lookupTable = lookupTable;
+    this.parentScope = parentScope;
+  }
+
+  lookup(name: string) {
+    const value = this.lookupTable.get(name);
+    if (value === undefined) return this.parentScope.lookup(name);
+    return value;
+  }
+}
+
+export class EvalCtx implements Scope {
   /**
    * The absolute resolved path of the directory of the script that's currently being executed.
    */
   readonly scriptDir: string;
+  readonly scope: Scope;
+
+  constructor(scriptDir: string, scope: Scope | undefined = undefined) {
+    this.scriptDir = scriptDir;
+    this.scope = scope === undefined ? new GlobalScope() : scope;
+  }
+
+  withShadowingScope(lookupTable: Map<string, any>) {
+    return new EvalCtx(
+      this.scriptDir,
+      new ShadowingScope(this.scope, lookupTable)
+    );
+  }
+
+  lookup(name: string) {
+    return this.scope.lookup(name);
+  }
 }
 
-export class Lambda {
-  readonly body: any;
-
-  constructor(body: any) {
-    this.body = body;
-  }
+export abstract class NixType {
+  abstract typeOf(): string;
 }
 
 export class NixInt extends NixType {
@@ -455,15 +490,17 @@ function _throwLessThanTypeError(lhs: any, rhs: any): void {
 }
 
 // Lambda:
-export function apply(lambda: any, argument: any): any {
-  if (!(lambda instanceof Lambda)) {
-    throw new EvalException(
-      `Attempt to call something which is not a function but '${typeOf(
-        lambda
-      )}'.`
-    );
-  }
-  return lambda.body;
+export function paramLambda(
+  evalCtx: EvalCtx,
+  paramName: string,
+  body: (evalCtx: EvalCtx) => any
+): any {
+  return (param) => {
+    let paramScope = new Map();
+    paramScope.set(paramName, param);
+    let innerEvalCtx = evalCtx.withShadowingScope(paramScope);
+    return body(innerEvalCtx);
+  };
 }
 
 // List:
@@ -553,8 +590,8 @@ function normalizePath(path: string): string {
 
 export default {
   // Types:
+  EvalCtx,
   EvalException,
-  Lambda,
   NixInt,
   Path,
 
@@ -588,7 +625,7 @@ export default {
   neq,
 
   // Lambda:
-  apply,
+  paramLambda,
 
   // List:
   concat,
