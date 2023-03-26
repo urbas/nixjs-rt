@@ -498,9 +498,17 @@ export function paramLambda(
   return (param) => {
     let paramScope = new Map();
     paramScope.set(paramName, param);
-    let innerEvalCtx = evalCtx.withShadowingScope(paramScope);
-    return body(innerEvalCtx);
+    return letIn(evalCtx, paramScope, body);
   };
+}
+
+// Let in:
+function letIn(
+  evalCtx: EvalCtx,
+  attrs: Map<string, any>,
+  body: (evalCtx: EvalCtx) => any
+): any {
+  return body(evalCtx.withShadowingScope(attrs));
 }
 
 // List:
@@ -626,6 +634,9 @@ export default {
 
   // Lambda:
   paramLambda,
+
+  // Let in:
+  letIn,
 
   // List:
   concat,
