@@ -404,6 +404,15 @@ test("parameter lambda", () => {
   ).toBe(42);
 });
 
+test("pattern lambda", () => {
+  const arg = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  expect(
+    nixrt.patternLambda(evalCtx, [["a", undefined]], (evalCtx) =>
+      evalCtx.lookup("a")
+    )(arg)
+  ).toBe(1);
+});
+
 // List:
 test("'++' operator", () => {
   const list_1 = [1];
