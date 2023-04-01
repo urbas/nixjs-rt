@@ -502,6 +502,20 @@ export function paramLambda(
   };
 }
 
+export function patternLambda(
+  evalCtx: EvalCtx,
+  patterns: [[string, any]],
+  body: (evalCtx: EvalCtx) => any
+): any {
+  return (param: Map<string, any>) => {
+    let paramScope = new Map();
+    for (const [ident, defaultValue] of patterns) {
+      paramScope.set(ident, param.get(ident));
+    }
+    return letIn(evalCtx, paramScope, body);
+  };
+}
+
 // Let in:
 function letIn(
   evalCtx: EvalCtx,
@@ -634,6 +648,7 @@ export default {
 
   // Lambda:
   paramLambda,
+  patternLambda,
 
   // Let in:
   letIn,
