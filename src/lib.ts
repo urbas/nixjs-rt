@@ -509,8 +509,17 @@ export function patternLambda(
 ): any {
   return (param: Map<string, any>) => {
     let paramScope = new Map();
-    for (const [ident, defaultValue] of patterns) {
-      paramScope.set(ident, param.get(ident));
+    for (const [paramName, defaultValue] of patterns) {
+      let paramValue = param.get(paramName);
+      if (paramValue === undefined) {
+        if (defaultValue === undefined) {
+          throw new EvalException(
+            `Function called without required argument '${paramName}'.`
+          );
+        }
+        paramValue = defaultValue;
+      }
+      paramScope.set(paramName, paramValue);
     }
     return letIn(evalCtx, paramScope, body);
   };
