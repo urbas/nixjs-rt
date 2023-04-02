@@ -413,6 +413,26 @@ test("pattern lambda", () => {
   ).toBe(1);
 });
 
+test("pattern lambda with default values", () => {
+  const arg = nixrt.attrset();
+  expect(
+    nixrt.patternLambda(evalCtx, [["a", 1]], (evalCtx) => evalCtx.lookup("a"))(
+      arg
+    )
+  ).toBe(1);
+});
+
+test("pattern lambda with missing parameter", () => {
+  let innerCtx = evalCtx.withShadowingScope(
+    nixrt.attrset([nixrt.attrpath("a"), 1])
+  );
+  expect(() =>
+    nixrt.patternLambda(innerCtx, [["a", undefined]], (evalCtx) =>
+      evalCtx.lookup("a")
+    )(nixrt.attrset())
+  ).toThrow(nixrt.EvalException);
+});
+
 // List:
 test("'++' operator", () => {
   const list_1 = [1];
