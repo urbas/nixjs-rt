@@ -407,7 +407,7 @@ test("parameter lambda", () => {
 test("pattern lambda", () => {
   const arg = nixrt.attrset([nixrt.attrpath("a"), 1]);
   expect(
-    nixrt.patternLambda(evalCtx, [["a", undefined]], (evalCtx) =>
+    nixrt.patternLambda(evalCtx, undefined, [["a", undefined]], (evalCtx) =>
       evalCtx.lookup("a")
     )(arg)
   ).toBe(1);
@@ -416,9 +416,9 @@ test("pattern lambda", () => {
 test("pattern lambda with default values", () => {
   const arg = nixrt.attrset();
   expect(
-    nixrt.patternLambda(evalCtx, [["a", 1]], (evalCtx) => evalCtx.lookup("a"))(
-      arg
-    )
+    nixrt.patternLambda(evalCtx, undefined, [["a", 1]], (evalCtx) =>
+      evalCtx.lookup("a")
+    )(arg)
   ).toBe(1);
 });
 
@@ -427,10 +427,19 @@ test("pattern lambda with missing parameter", () => {
     nixrt.attrset([nixrt.attrpath("a"), 1])
   );
   expect(() =>
-    nixrt.patternLambda(innerCtx, [["a", undefined]], (evalCtx) =>
+    nixrt.patternLambda(innerCtx, undefined, [["a", undefined]], (evalCtx) =>
       evalCtx.lookup("a")
     )(nixrt.attrset())
   ).toThrow(nixrt.EvalException);
+});
+
+test("pattern lambda with arguments binding", () => {
+  const arg = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  expect(
+    nixrt.patternLambda(evalCtx, "args", [["a", undefined]], (evalCtx) =>
+      nixrt.select(evalCtx.lookup("args"), nixrt.attrpath("a"), undefined)
+    )(arg)
+  ).toBe(1);
 });
 
 // List:
@@ -487,6 +496,32 @@ test("typeOf", () => {
   expect(nixrt.typeOf(new Map())).toBe("set");
   expect(nixrt.typeOf(new Path("/"))).toBe("path");
   // TODO: cover other Nix types
+});
+
+// With:
+test("'with' expression puts attrs into scope", () => {
+  const namespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  expect(
+    nixrt.withExpr(evalCtx, namespace, (evalCtx) => evalCtx.lookup("a"))
+  ).toBe(1);
+});
+
+test("'with' expression does not shadow variables", () => {
+  const namespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  let outerCtx = evalCtx.withShadowingScope(
+    nixrt.attrset([nixrt.attrpath("a"), 2])
+  );
+  expect(
+    nixrt.withExpr(outerCtx, namespace, (evalCtx) => evalCtx.lookup("a"))
+  ).toBe(2);
+});
+
+test("'with' expressions shadow themselves", () => {
+  const outerNamespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  const innerNamespace = nixrt.attrset([nixrt.attrpath("a"), 2]);
+  const innerExpr = (evalCtx) =>
+    nixrt.withExpr(evalCtx, innerNamespace, (evalCtx) => evalCtx.lookup("a"));
+  expect(nixrt.withExpr(evalCtx, outerNamespace, innerExpr)).toBe(2);
 });
 
 function testEvalCtx() {

@@ -12,25 +12,25 @@ interface Scope {
   lookup(name: string): any;
 }
 
-class GlobalScope implements Scope {
-  lookup(name: string) {
-    throw new EvalException(`Could not find variable '${name}'.`);
-  }
-}
-
-class ShadowingScope implements Scope {
+class InnerScope implements Scope {
   readonly lookupTable: Map<string, any>;
-  readonly parentScope: Scope;
+  readonly parent: Scope;
 
   constructor(parentScope: Scope, lookupTable: Map<string, any>) {
     this.lookupTable = lookupTable;
-    this.parentScope = parentScope;
+    this.parent = parentScope;
   }
 
   lookup(name: string) {
     const value = this.lookupTable.get(name);
-    if (value === undefined) return this.parentScope.lookup(name);
+    if (value === undefined) return this.parent.lookup(name);
     return value;
+  }
+}
+
+class GlobalScope implements Scope {
+  lookup(name: string) {
+    return undefined;
   }
 }
 
@@ -39,22 +39,43 @@ export class EvalCtx implements Scope {
    * The absolute resolved path of the directory of the script that's currently being executed.
    */
   readonly scriptDir: string;
-  readonly scope: Scope;
+  readonly shadowScope: Scope;
+  readonly nonShadowScope: Scope;
 
-  constructor(scriptDir: string, scope: Scope | undefined = undefined) {
+  constructor(
+    scriptDir: string,
+    shadowScope: Scope | undefined = undefined,
+    nonShadowScope: Scope | undefined = undefined
+  ) {
     this.scriptDir = scriptDir;
-    this.scope = scope === undefined ? new GlobalScope() : scope;
+    this.shadowScope =
+      shadowScope === undefined ? new GlobalScope() : shadowScope;
+    this.nonShadowScope =
+      nonShadowScope === undefined ? new GlobalScope() : nonShadowScope;
   }
 
-  withShadowingScope(lookupTable: Map<string, any>) {
+  withShadowingScope(lookupTable: Map<string, any>): EvalCtx {
     return new EvalCtx(
       this.scriptDir,
-      new ShadowingScope(this.scope, lookupTable)
+      new InnerScope(this.shadowScope, lookupTable),
+      this.nonShadowScope
+    );
+  }
+
+  withNonShadowingScope(lookupTable: Map<string, any>): EvalCtx {
+    return new EvalCtx(
+      this.scriptDir,
+      this.shadowScope,
+      new InnerScope(this.nonShadowScope, lookupTable)
     );
   }
 
   lookup(name: string) {
-    return this.scope.lookup(name);
+    let value = this.shadowScope.lookup(name);
+    if (value !== undefined) return value;
+    value = this.nonShadowScope.lookup(name);
+    if (value !== undefined) return value;
+    throw new EvalException(`Could not find variable '${name}'.`);
   }
 }
 
@@ -504,6 +525,7 @@ export function paramLambda(
 
 export function patternLambda(
   evalCtx: EvalCtx,
+  argsBind: string | undefined,
   patterns: [[string, any]],
   body: (evalCtx: EvalCtx) => any
 ): any {
@@ -521,12 +543,15 @@ export function patternLambda(
       }
       paramScope.set(paramName, paramValue);
     }
+    if (argsBind !== undefined) {
+      paramScope.set(argsBind, param);
+    }
     return letIn(evalCtx, paramScope, body);
   };
 }
 
 // Let in:
-function letIn(
+export function letIn(
   evalCtx: EvalCtx,
   attrs: Map<string, any>,
   body: (evalCtx: EvalCtx) => any
@@ -544,7 +569,7 @@ export function concat(lhs: any, rhs: any): Array<any> {
   return lhs.concat(rhs);
 }
 
-// List:
+// Path:
 export function toPath(evalCtx: EvalCtx, path: string): Path {
   if (!isAbsolutePath(path)) {
     path = joinPaths(evalCtx.scriptDir, path);
@@ -619,6 +644,15 @@ function normalizePath(path: string): string {
   return (isAbsolutePath(path) ? "/" : "") + normalizedSegments.join("/");
 }
 
+// With:
+export function withExpr(
+  evalCtx: EvalCtx,
+  namespace: Map<string, any>,
+  body: (evalCtx: EvalCtx) => any
+): any {
+  return body(evalCtx.withNonShadowingScope(namespace));
+}
+
 export default {
   // Types:
   EvalCtx,
@@ -665,7 +699,7 @@ export default {
   // List:
   concat,
 
-  // List:
+  // Path:
   toPath,
 
   // String:
@@ -673,4 +707,7 @@ export default {
 
   // Type functions:
   typeOf,
+
+  // With:
+  withExpr,
 };
