@@ -13,4 +13,4 @@ function expectFile() {
 }
 
 expectFile $outLink/lib/node_modules/nixrt/src/lib.ts
-expectFile $outLink/lib/node_modules/nixrt/src/lib.js
+expectFile $outLink/lib/node_modules/nixrt/dist/lib.js

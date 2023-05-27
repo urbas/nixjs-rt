@@ -1,5 +1,5 @@
 /.direnv
-/build
+/dist
 /coverage
 /node_modules
 tsconfig.tsbuildinfo
