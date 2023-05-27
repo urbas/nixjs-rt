@@ -1,5 +1,12 @@
 import { beforeEach, expect, test } from "@jest/globals";
-import nixrt, { attrpath, attrset, EvalCtx, NixInt, Path } from "./lib";
+import nixrt, {
+  attrpath,
+  attrset,
+  EvalCtx,
+  NixInt,
+  Path,
+  toStrict,
+} from "./lib";
 
 let evalCtx: EvalCtx;
 
@@ -139,41 +146,67 @@ test("'/' operator on non-numbers raises exceptions", () => {
 
 // Attrset:
 test("attrset construction", () => {
-  expect(attrset()).toStrictEqual(new Map());
-  expect(attrset([attrpath("a"), 1])).toStrictEqual(new Map([["a", 1]]));
-  expect(attrset([attrpath("a", "b"), 1])).toStrictEqual(
-    new Map([["a", new Map([["b", 1]])]])
+  expect(attrset(evalCtx, [])).toStrictEqual(new Map());
+  expect(toStrict(attrset(evalCtx, [keyVal("a", (_) => 1)]))).toStrictEqual(
+    new Map([["a", 1]])
   );
+  const nestedAttrset = new Map([["a", new Map([["b", 1]])]]);
+  expect(toStrict(attrset(evalCtx, [keyVal("a.b", (_) => 1)]))).toStrictEqual(
+    nestedAttrset
+  );
+  expect(
+    toStrict(
+      attrset(evalCtx, [keyVal("a", (_) => new Map()), keyVal("a.b", (_) => 1)])
+    )
+  ).toStrictEqual(nestedAttrset);
 });
 
 test("attrsets ignore null attrs", () => {
-  expect(attrset([attrpath(null, "a"), 1])).toStrictEqual(new Map());
-  expect(attrset([attrpath(null), 1])).toStrictEqual(new Map());
-  expect(attrset([attrpath("a", null), 1])).toStrictEqual(
-    new Map([["a", new Map()]])
+  expect(attrset(evalCtx, [[attrpath(null, "a"), (_) => 1]])).toStrictEqual(
+    new Map()
   );
+  expect(attrset(evalCtx, [[attrpath(null), (_) => 1]])).toStrictEqual(
+    new Map()
+  );
+  expect(
+    toStrict(attrset(evalCtx, [[attrpath("a", null), (_) => 1]]))
+  ).toStrictEqual(new Map([["a", new Map()]]));
 });
 
 test("attrset construction with repeated attrs throws", () => {
-  expect(() => attrset([attrpath("a"), 1], [attrpath("a"), 1])).toThrow(
-    nixrt.EvalException
-  );
-  expect(() => attrset([attrpath("a"), 1], [attrpath("a", "b"), 1])).toThrow(
-    nixrt.EvalException
-  );
+  expect(() =>
+    attrset(evalCtx, [keyVal("a", (_) => 1), keyVal("a", (_) => 1)])
+  ).toThrow(nixrt.EvalException);
+  expect(() =>
+    attrset(evalCtx, [keyVal("a", (_) => 1), keyVal("a.b", (_) => -1)])
+  ).toThrow(nixrt.EvalException);
 });
 
 test("attrset with non-string attrs throw", () => {
-  expect(() => attrset([attrpath(1), 1])).toThrow(nixrt.EvalException);
+  expect(() => attrset(evalCtx, [[attrpath(1), (_) => 1]])).toThrow(
+    nixrt.EvalException
+  );
 });
 
 test("'//' operator on attrsets", () => {
-  expect(nixrt.update(attrset(), attrset())).toStrictEqual(new Map());
-  expect(nixrt.update(attrset([attrpath("a"), 1]), attrset())).toStrictEqual(
-    new Map([["a", 1]])
-  );
   expect(
-    nixrt.update(attrset([attrpath("a"), 1]), attrset([attrpath("b"), 2]))
+    nixrt.update(attrset(evalCtx, []), attrset(evalCtx, []))
+  ).toStrictEqual(new Map());
+  expect(
+    toStrict(
+      nixrt.update(
+        attrset(evalCtx, [keyVal("a", (_) => 1)]),
+        attrset(evalCtx, [])
+      )
+    )
+  ).toStrictEqual(new Map([["a", 1]]));
+  expect(
+    toStrict(
+      nixrt.update(
+        attrset(evalCtx, [keyVal("a", (_) => 1)]),
+        attrset(evalCtx, [keyVal("b", (_) => 2)])
+      )
+    )
   ).toStrictEqual(
     new Map([
       ["a", 1],
@@ -181,24 +214,31 @@ test("'//' operator on attrsets", () => {
     ])
   );
   expect(
-    nixrt.update(attrset([attrpath("a"), 1]), attrset([attrpath("a"), 2]))
+    toStrict(
+      nixrt.update(
+        attrset(evalCtx, [keyVal("a", (_) => 1)]),
+        attrset(evalCtx, [keyVal("a", (_) => 2)])
+      )
+    )
   ).toStrictEqual(new Map([["a", 2]]));
 });
 
 test("'//' operator on non-attrsets raises exceptions", () => {
-  expect(() => nixrt.and(attrset(), 1)).toThrow(nixrt.EvalException);
-  expect(() => nixrt.and(1, attrset())).toThrow(nixrt.EvalException);
+  expect(() => nixrt.and(attrset(evalCtx, []), 1)).toThrow(nixrt.EvalException);
+  expect(() => nixrt.and(1, attrset(evalCtx, []))).toThrow(nixrt.EvalException);
 });
 
 test("'?' operator", () => {
-  expect(nixrt.has(attrset(), attrpath("a"))).toBe(false);
-  expect(nixrt.has(attrset([attrpath("a"), 1]), attrpath("a"))).toBe(true);
-  expect(nixrt.has(attrset([attrpath("a"), 1]), attrpath("a", "b"))).toBe(
-    false
-  );
-  expect(nixrt.has(attrset([attrpath("a", "b"), 1]), attrpath("a", "b"))).toBe(
-    true
-  );
+  expect(nixrt.has(attrset(evalCtx, []), attrpath("a"))).toBe(false);
+  expect(
+    nixrt.has(attrset(evalCtx, [keyVal("a", (_) => 1)]), attrpath("a"))
+  ).toBe(true);
+  expect(
+    nixrt.has(attrset(evalCtx, [keyVal("a", (_) => 1)]), attrpath("a", "b"))
+  ).toBe(false);
+  expect(
+    nixrt.has(attrset(evalCtx, [keyVal("a.b", (_) => -1)]), attrpath("a", "b"))
+  ).toBe(true);
 });
 
 test("'?' operator on other types returns false", () => {
@@ -208,33 +248,69 @@ test("'?' operator on other types returns false", () => {
 
 test("'.' operator", () => {
   expect(
-    nixrt.select(attrset([attrpath("a"), 1]), attrpath("a"), undefined)
+    nixrt.select(
+      attrset(evalCtx, [keyVal("a", (_) => 1)]),
+      attrpath("a"),
+      undefined
+    )
   ).toBe(1);
   expect(
     nixrt.select(
-      attrset([attrpath("a", "b"), 1]),
+      attrset(evalCtx, [keyVal("a.b", (_) => 1)]),
       attrpath("a", "b"),
       undefined
     )
   ).toBe(1);
-  expect(nixrt.select(attrset(), attrpath("a"), 1)).toBe(1);
+  expect(nixrt.select(attrset(evalCtx, []), attrpath("a"), 1)).toBe(1);
   expect(
-    nixrt.select(attrset([attrpath("a", "a"), 1]), attrpath("a", "b"), 1)
+    nixrt.select(
+      attrset(evalCtx, [keyVal("a.a", (_) => 1)]),
+      attrpath("a", "b"),
+      1
+    )
   ).toBe(1);
 
   expect(
     nixrt.select(
-      nixrt.attrset([nixrt.attrpath("a"), 1], [nixrt.attrpath("b", "c"), 2]),
+      nixrt.attrset(evalCtx, [keyVal("a", (_) => 1), keyVal("b.c", (_) => 2)]),
       nixrt.attrpath("a", "c"),
       5
     )
   ).toBe(5);
 });
 
-test("'//' operator throws when attrpath doesn't exist", () => {
-  expect(() => nixrt.select(attrset(), attrpath("a"), undefined)).toThrow(
-    nixrt.EvalException
-  );
+test("'.' operator throws when attrpath doesn't exist", () => {
+  expect(() =>
+    nixrt.select(attrset(evalCtx, []), attrpath("a"), undefined)
+  ).toThrow(nixrt.EvalException);
+});
+
+test("recursive attrsets allow referencing attributes defined later", () => {
+  expect(
+    nixrt.select(
+      nixrt.recursiveAttrset(evalCtx, [
+        keyVal("a", (ctx) => ctx.lookup("b") + 1),
+        keyVal("b", (_ctx) => 1),
+      ]),
+      attrpath("a"),
+      undefined
+    )
+  ).toBe(2);
+  // TODO: This should return 1: `(rec { ${a} = 1; a = "b"; }).b`
+  // TODO: This should fail: `(rec { ${a} = 1; ${b} = "c"; b = "a"; }).c`
+});
+
+test("non-recursive attrsets don't allow references to other attributes in the attrset", () => {
+  expect(() =>
+    nixrt.select(
+      nixrt.attrset(evalCtx, [
+        keyVal("a", (ctx) => ctx.lookup("b") + 1),
+        keyVal("b", (_ctx) => 1),
+      ]),
+      attrpath("a"),
+      undefined
+    )
+  ).toThrow(nixrt.EvalException);
 });
 
 // Boolean:
@@ -405,7 +481,7 @@ test("parameter lambda", () => {
 });
 
 test("pattern lambda", () => {
-  const arg = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  const arg = nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)]);
   expect(
     nixrt.patternLambda(evalCtx, undefined, [["a", undefined]], (evalCtx) =>
       evalCtx.lookup("a")
@@ -414,7 +490,7 @@ test("pattern lambda", () => {
 });
 
 test("pattern lambda with default values", () => {
-  const arg = nixrt.attrset();
+  const arg = nixrt.attrset(evalCtx, []);
   expect(
     nixrt.patternLambda(evalCtx, undefined, [["a", 1]], (evalCtx) =>
       evalCtx.lookup("a")
@@ -424,22 +500,45 @@ test("pattern lambda with default values", () => {
 
 test("pattern lambda with missing parameter", () => {
   let innerCtx = evalCtx.withShadowingScope(
-    nixrt.attrset([nixrt.attrpath("a"), 1])
+    nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)])
   );
   expect(() =>
     nixrt.patternLambda(innerCtx, undefined, [["a", undefined]], (evalCtx) =>
       evalCtx.lookup("a")
-    )(nixrt.attrset())
+    )(nixrt.attrset(evalCtx, []))
   ).toThrow(nixrt.EvalException);
 });
 
 test("pattern lambda with arguments binding", () => {
-  const arg = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  const arg = nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)]);
   expect(
     nixrt.patternLambda(evalCtx, "args", [["a", undefined]], (evalCtx) =>
       nixrt.select(evalCtx.lookup("args"), nixrt.attrpath("a"), undefined)
     )(arg)
   ).toBe(1);
+});
+
+// Lazy:
+test("'Lazy.getValue' evaluates the body only once", () => {
+  let evaluationCounter = 0;
+  let lazyValue = new nixrt.Lazy(evalCtx, (_evalCtx) => ++evaluationCounter);
+  expect(lazyValue.getValue()).toEqual(1);
+  expect(lazyValue.getValue()).toEqual(1);
+});
+
+test("'Lazy.getValue' uses the construction-time evaluation context", () => {
+  let innerCtx = evalCtx.withShadowingScope(
+    nixrt.attrset(evalCtx, [[nixrt.attrpath("a"), (_) => 42]])
+  );
+  let lazyValue = new nixrt.Lazy(innerCtx, (evalCtx) => evalCtx.lookup("a"));
+  expect(lazyValue.getValue()).toEqual(42);
+});
+
+test("'Lazy.getValue' drops the body and the evaluation context", () => {
+  let lazyValue = new nixrt.Lazy(evalCtx, (_) => 1);
+  lazyValue.getValue();
+  expect(lazyValue.body).toBeUndefined();
+  expect(lazyValue.evalCtx).toBeUndefined();
 });
 
 // List:
@@ -500,30 +599,33 @@ test("typeOf", () => {
 
 // With:
 test("'with' expression puts attrs into scope", () => {
-  const namespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  const namespace = nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)]);
   expect(
     nixrt.withExpr(evalCtx, namespace, (evalCtx) => evalCtx.lookup("a"))
   ).toBe(1);
 });
 
 test("'with' expression does not shadow variables", () => {
-  const namespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
+  const namespace = nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)]);
   let outerCtx = evalCtx.withShadowingScope(
-    nixrt.attrset([nixrt.attrpath("a"), 2])
+    nixrt.attrset(evalCtx, [keyVal("a", (_) => 2)])
   );
-  expect(
-    nixrt.withExpr(outerCtx, namespace, (evalCtx) => evalCtx.lookup("a"))
-  ).toBe(2);
+  expect(nixrt.withExpr(outerCtx, namespace, (ctx) => ctx.lookup("a"))).toBe(2);
 });
 
 test("'with' expressions shadow themselves", () => {
-  const outerNamespace = nixrt.attrset([nixrt.attrpath("a"), 1]);
-  const innerNamespace = nixrt.attrset([nixrt.attrpath("a"), 2]);
+  const outerNamespace = nixrt.attrset(evalCtx, [keyVal("a", (_) => 1)]);
+  const innerNamespace = nixrt.attrset(evalCtx, [keyVal("a", (_) => 2)]);
   const innerExpr = (evalCtx) =>
     nixrt.withExpr(evalCtx, innerNamespace, (evalCtx) => evalCtx.lookup("a"));
   expect(nixrt.withExpr(evalCtx, outerNamespace, innerExpr)).toBe(2);
 });
 
+// Helpers:
 function testEvalCtx() {
   return new EvalCtx("/test_base");
+}
+
+function keyVal<T>(attrpathStr: string, value: T): [string[], T] {
+  return [attrpathStr.split("."), value];
 }

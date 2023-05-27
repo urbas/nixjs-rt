@@ -8,21 +8,24 @@ export class EvalException extends Error {
   }
 }
 
+export type Body = (evalCtx: EvalCtx) => any;
+export type Attrset = Map<string, any>;
+
 interface Scope {
   lookup(name: string): any;
 }
 
 class InnerScope implements Scope {
-  readonly lookupTable: Map<string, any>;
+  readonly lookupTable: Attrset;
   readonly parent: Scope;
 
-  constructor(parentScope: Scope, lookupTable: Map<string, any>) {
+  constructor(parentScope: Scope, lookupTable: Attrset) {
     this.lookupTable = lookupTable;
     this.parent = parentScope;
   }
 
   lookup(name: string) {
-    const value = this.lookupTable.get(name);
+    const value = _strictSelect(this.lookupTable, name);
     if (value === undefined) return this.parent.lookup(name);
     return value;
   }
@@ -54,7 +57,7 @@ export class EvalCtx implements Scope {
       nonShadowScope === undefined ? new GlobalScope() : nonShadowScope;
   }
 
-  withShadowingScope(lookupTable: Map<string, any>): EvalCtx {
+  withShadowingScope(lookupTable: Attrset): EvalCtx {
     return new EvalCtx(
       this.scriptDir,
       new InnerScope(this.shadowScope, lookupTable),
@@ -62,7 +65,7 @@ export class EvalCtx implements Scope {
     );
   }
 
-  withNonShadowingScope(lookupTable: Map<string, any>): EvalCtx {
+  withNonShadowingScope(lookupTable: Attrset): EvalCtx {
     return new EvalCtx(
       this.scriptDir,
       this.shadowScope,
@@ -115,6 +118,28 @@ export class Path extends NixType {
 
   typeOf(): string {
     return "path";
+  }
+}
+
+export class Lazy {
+  body: Body;
+  evalCtx: EvalCtx;
+  value: any;
+
+  constructor(evalCtx: EvalCtx, body: Body) {
+    this.body = body;
+    this.evalCtx = evalCtx;
+  }
+
+  getValue(): any {
+    if (this.value === undefined) {
+      this.value = this.body(this.evalCtx);
+      // Now that we have evaluated this lazy value already, we don't have to do it again.
+      // This means we can let go of the `body` and the `evalCtx` so they can be garbage-collected.
+      this.body = undefined;
+      this.evalCtx = undefined;
+    }
+    return this.value;
   }
 }
 
@@ -236,10 +261,30 @@ export function attrpath(...attrs: any[]): string[] {
   return attrs;
 }
 
-export function attrset(...entries: [string[], any][]): Map<string, any> {
+export function attrset(
+  evalCtx: EvalCtx,
+  entries: [string[], Body][]
+): Attrset {
+  return _buildAttrset(evalCtx, new Map(), entries);
+}
+
+// TODO: make it optional for attrset to be recursive.
+export function recursiveAttrset(
+  evalCtx: EvalCtx,
+  entries: [string[], Body][]
+): Attrset {
   const newAttrset = new Map();
+  const innerCtx = evalCtx.withShadowingScope(newAttrset);
+  return _buildAttrset(innerCtx, newAttrset, entries);
+}
+
+function _buildAttrset(
+  evalCtx: EvalCtx,
+  newAttrset: Attrset,
+  entries: [string[], Body][]
+): Attrset {
   for (const [attrpath, value] of entries) {
-    _setAttrpath(newAttrset, attrpath, value);
+    _setAttrpath(newAttrset, attrpath, new Lazy(evalCtx, value));
   }
   return newAttrset;
 }
@@ -250,6 +295,9 @@ export function has(theAttrset: any, attrPath: string[]): boolean {
     if (!(foundValue instanceof Map)) {
       return false;
     }
+    // We're using `get` here instead of `_strictSelect` because we're not
+    // interested in the value of the attribute but only whether the attribute
+    // exists or not. So, no need to evaluate the attribute value.
     foundValue = foundValue.get(attr);
   }
   return foundValue !== undefined;
@@ -263,6 +311,7 @@ export function select(
   const nestingDepth = attrPath.length - 1;
   for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
     const attr = attrPath[nestingLevel];
+    // TODO: we should use `_strictSelect` here.
     let nestedMap = theAttrset.get(attr);
     if (!(nestedMap instanceof Map)) {
       theAttrset = undefined;
@@ -271,19 +320,38 @@ export function select(
     theAttrset = nestedMap;
   }
 
-  let foundValue = undefined;
-  if (theAttrset !== undefined) {
-    foundValue = theAttrset.get(attrPath[nestingDepth]);
+  let value = _strictSelect(theAttrset, attrPath[nestingDepth]);
+
+  if (value === undefined) {
+    if (defaultValue === undefined) {
+      throw new EvalException(`Attribute '${attrPath}' is missing.`);
+    }
+    return defaultValue;
   }
 
-  if (foundValue === undefined && defaultValue === undefined) {
-    throw new EvalException(`Attribute '${attrPath}' is missing.`);
-  }
-
-  return foundValue === undefined ? defaultValue : foundValue;
+  return value;
 }
 
-export function update(lhs: any, rhs: any): Map<string, any> {
+function _strictSelect(theAttrset: Attrset, attrName: string): any {
+  let foundValue = undefined;
+  if (theAttrset !== undefined) {
+    foundValue = theAttrset.get(attrName);
+  }
+
+  if (foundValue === undefined) {
+    return undefined;
+  }
+
+  if (foundValue instanceof Lazy) {
+    const strictValue = foundValue.getValue();
+    theAttrset.set(attrName, strictValue);
+    return strictValue;
+  }
+
+  return foundValue;
+}
+
+export function update(lhs: any, rhs: any): Attrset {
   if (!(lhs instanceof Map) || !(rhs instanceof Map)) {
     throw new EvalException(
       `Cannot apply operator '//' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
@@ -297,18 +365,21 @@ export function update(lhs: any, rhs: any): Map<string, any> {
   return resultMap;
 }
 
-function _setAttrpath(
-  newAttrset: Map<string, any>,
-  attrpath: string[],
-  value: any
-) {
+function _setAttrpath(newAttrset: Attrset, attrpath: string[], value: any) {
   const nestingDepth = attrpath.length - 1;
   for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
     const attr = attrpath[nestingLevel];
     if (attr === null) {
       return;
     }
-    let nestedMap = newAttrset.get(attr);
+    // TODO: Using `_strictSelect` here is a  from nix's behaviour.
+    // Nix currently throws an error while evaluating the following:
+    //   { a = builtins.trace "Evaluated" {}; a.b = 1; }
+    //   error: attribute 'a.b' already defined at
+    // In similar vein, `nix` throws evaluating this expression:
+    //   let c = {}; in { a = c; a.b = 1; }
+    // We should reproduce this here.
+    let nestedMap = _strictSelect(newAttrset, attr);
     if (nestedMap === undefined) {
       nestedMap = new Map<string, any>();
       newAttrset.set(attr, nestedMap);
@@ -403,11 +474,12 @@ function _arrays_eq(lhs: Array<any>, rhs: Array<any>): boolean {
   return true;
 }
 
-function _attrsets_eq(lhs: Map<string, any>, rhs: Map<string, any>): boolean {
+function _attrsets_eq(lhs: Attrset, rhs: Attrset): boolean {
   if (lhs.size !== rhs.size) {
     return false;
   }
   for (const key of lhs.keys()) {
+    // TODO: We should likely use `_strictSelect` here.
     if (!eq(lhs.get(key), rhs.get(key))) {
       return false;
     }
@@ -514,7 +586,7 @@ function _throwLessThanTypeError(lhs: any, rhs: any): void {
 export function paramLambda(
   evalCtx: EvalCtx,
   paramName: string,
-  body: (evalCtx: EvalCtx) => any
+  body: Body
 ): any {
   return (param) => {
     let paramScope = new Map();
@@ -527,11 +599,13 @@ export function patternLambda(
   evalCtx: EvalCtx,
   argsBind: string | undefined,
   patterns: [[string, any]],
-  body: (evalCtx: EvalCtx) => any
+  body: Body
 ): any {
-  return (param: Map<string, any>) => {
+  return (param: Attrset) => {
     let paramScope = new Map();
     for (const [paramName, defaultValue] of patterns) {
+      // We are using `get` here instead of `_strictSelect` because we're adding the
+      // parameter to the function's scope. The parameter might be unused inside function.
       let paramValue = param.get(paramName);
       if (paramValue === undefined) {
         if (defaultValue === undefined) {
@@ -551,11 +625,7 @@ export function patternLambda(
 }
 
 // Let in:
-export function letIn(
-  evalCtx: EvalCtx,
-  attrs: Map<string, any>,
-  body: (evalCtx: EvalCtx) => any
-): any {
+export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): any {
   return body(evalCtx.withShadowingScope(attrs));
 }
 
@@ -612,6 +682,21 @@ export function typeOf(object: any): string {
 }
 
 // Utilities:
+export function toStrict(value: any): any {
+  if (value instanceof Map) {
+    return toStrictAttrset(value);
+  }
+  return value;
+}
+
+export function toStrictAttrset(theAttrset: Attrset): Attrset {
+  for (const key of theAttrset.keys()) {
+    const value = _strictSelect(theAttrset, key);
+    toStrict(value);
+  }
+  return theAttrset;
+}
+
 function isNumber(object: any): boolean {
   return typeof object === "number" || object instanceof NixInt;
 }
@@ -647,8 +732,8 @@ function normalizePath(path: string): string {
 // With:
 export function withExpr(
   evalCtx: EvalCtx,
-  namespace: Map<string, any>,
-  body: (evalCtx: EvalCtx) => any
+  namespace: Attrset,
+  body: Body
 ): any {
   return body(evalCtx.withNonShadowingScope(namespace));
 }
@@ -657,6 +742,7 @@ export default {
   // Types:
   EvalCtx,
   EvalException,
+  Lazy,
   NixInt,
   Path,
 
@@ -671,6 +757,7 @@ export default {
   attrpath,
   attrset,
   has,
+  recursiveAttrset,
   select,
   update,
 
@@ -707,6 +794,10 @@ export default {
 
   // Type functions:
   typeOf,
+
+  // Utilies:
+  toStrict,
+  toStrictAttrset,
 
   // With:
   withExpr,
