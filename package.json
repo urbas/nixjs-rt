@@ -4,8 +4,8 @@
   "description": "A library that implements Nix language semantics in JS.",
   "main": "src/lib.js",
   "scripts": {
-    "build": "tsc -p .",
-    "build-local": "tsc -w -p . --outDir build",
+    "build": "tsc -p . --outDir dist",
+    "build-watch": "tsc -w -p . --outDir dist",
     "fmt": "prettier --write .",
     "fmt-check": "prettier --check .",
     "test": "jest --color",
@@ -27,5 +27,9 @@
     "prettier": "2.8.3",
     "ts-jest": "^29.0.5",
     "typescript": "^4.9.4"
-  }
+  },
+  "files": [
+    "dist/lib.js",
+    "src/lib.ts"
+  ]
 }
