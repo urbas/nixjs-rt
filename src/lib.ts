@@ -8,31 +8,30 @@ export class EvalException extends Error {
   }
 }
 
-export type Body = (evalCtx: EvalCtx) => any;
-export type Attrset = Map<string, any>;
+export type Body = (evalCtx: EvalCtx) => NixType;
 
 interface Scope {
-  lookup(name: string): any;
+  lookup(name: string): NixType | undefined;
 }
 
-class InnerScope implements Scope {
-  readonly lookupTable: Attrset;
+class CompoundScope implements Scope {
+  readonly childScope: Scope;
   readonly parent: Scope;
 
-  constructor(parentScope: Scope, lookupTable: Attrset) {
-    this.lookupTable = lookupTable;
+  constructor(parentScope: Scope, childScope: Scope) {
+    this.childScope = childScope;
     this.parent = parentScope;
   }
 
-  lookup(name: string) {
-    const value = _strictSelect(this.lookupTable, name);
+  lookup(name: string): NixType | undefined {
+    const value = this.childScope.lookup(name);
     if (value === undefined) return this.parent.lookup(name);
     return value;
   }
 }
 
 class GlobalScope implements Scope {
-  lookup(name: string) {
+  lookup(name: string): NixType | undefined {
     return undefined;
   }
 }
@@ -57,23 +56,23 @@ export class EvalCtx implements Scope {
       nonShadowScope === undefined ? new GlobalScope() : nonShadowScope;
   }
 
-  withShadowingScope(lookupTable: Attrset): EvalCtx {
+  withShadowingScope(lookupTable: Scope): EvalCtx {
     return new EvalCtx(
       this.scriptDir,
-      new InnerScope(this.shadowScope, lookupTable),
+      new CompoundScope(this.shadowScope, lookupTable),
       this.nonShadowScope
     );
   }
 
-  withNonShadowingScope(lookupTable: Attrset): EvalCtx {
+  withNonShadowingScope(lookupTable: Scope): EvalCtx {
     return new EvalCtx(
       this.scriptDir,
       this.shadowScope,
-      new InnerScope(this.nonShadowScope, lookupTable)
+      new CompoundScope(this.nonShadowScope, lookupTable)
     );
   }
 
-  lookup(name: string) {
+  lookup(name: string): NixType {
     let value = this.shadowScope.lookup(name);
     if (value !== undefined) return value;
     value = this.nonShadowScope.lookup(name);
@@ -83,7 +82,470 @@ export class EvalCtx implements Scope {
 }
 
 export abstract class NixType {
+  /**
+   * This method implements the `+` operator. It adds the `rhs` value to this value.
+   */
+  add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    // TODO: can we get rid of the EvalCtx? It's needed when joining paths. Maybe we can store
+    // the required context needed by paths in themselves rather than passing it here?
+    throw new EvalException(
+      `Cannot add '${this.typeOf()}' to '${rhs.typeOf()}'.`
+    );
+  }
+
+  and(rhs: any): NixBool {
+    return _nixBoolFromJs(this.asBoolean() && rhs.asBoolean());
+  }
+
+  asBoolean(): boolean {
+    throw new EvalException(
+      `Value is '${this.typeOf()}' but a boolean was expected.`
+    );
+  }
+
+  asString(): string {
+    throw new EvalException(
+      `Value is '${this.typeOf()}' but a string was expected.`
+    );
+  }
+
+  div(rhs: NixType): NixInt | NixFloat {
+    throw new EvalException(
+      `Cannot divide '${this.typeOf()}' and '${rhs.typeOf()}'.`
+    );
+  }
+
+  /**
+   * This method implements the `==` operator. It compares the `rhs` value with this value for equality.
+   */
+  eq(rhs: NixType): NixBool {
+    return FALSE;
+  }
+
+  has(attrPath: NixType[]): NixBool {
+    return FALSE;
+  }
+
+  implication(rhs: NixType): NixBool {
+    return _nixBoolFromJs(!this.asBoolean() || rhs.asBoolean());
+  }
+
+  invert(): NixBool {
+    return _nixBoolFromJs(!this.asBoolean());
+  }
+
+  /**
+   * This method implements the `<` operator. It checks whether the `rhs` value is lower than this value.
+   */
+  less(rhs: NixType): NixBool {
+    throw new EvalException(
+      `Cannot compare '${this.typeOf()}' with '${rhs.typeOf()}'.`
+    );
+  }
+
+  lessEq(rhs: NixType): NixBool {
+    return rhs.less(this).invert();
+  }
+
+  more(rhs: NixType): NixBool {
+    return rhs.less(this);
+  }
+
+  moreEq(rhs: any): NixBool {
+    return this.less(rhs).invert();
+  }
+
+  mul(rhs: NixType): NixInt | NixFloat {
+    throw new EvalException(
+      `Cannot multiply '${this.typeOf()}' and '${rhs.typeOf()}'.`
+    );
+  }
+
+  neg(): NixInt | NixFloat {
+    throw new EvalException(`Cannot negate '${this.typeOf()}'.`);
+  }
+
+  neq(rhs: NixType): NixBool {
+    return this.eq(rhs).invert();
+  }
+
+  or(rhs: NixType): NixBool {
+    return _nixBoolFromJs(this.asBoolean() || rhs.asBoolean());
+  }
+
+  /**
+   * This method implements the `-` operator. It subtracts the `rhs` value from this value.
+   */
+  sub(rhs: NixType): NixInt | NixFloat {
+    throw new EvalException(
+      `Cannot subtract '${this.typeOf()}' and '${rhs.typeOf()}'.`
+    );
+  }
+
+  /**
+   * Converts this Nix value into a JavaScript value.
+   */
+  abstract toJs(): any;
+
+  /**
+   * If this nix value is lazy this method computes the value stored
+   * by the lazy value and returns it. Otherwise this method returns
+   * the value itself.
+   */
+  toStrict(): NixType {
+    return this;
+  }
+
+  /**
+   * Returns a human-readable name of the type of this type.
+   */
   abstract typeOf(): string;
+
+  /**
+   * Returns a new attrset whose attributes are a union of this attrset and the right-hand-side attrset.
+   * The values are taken from the right-hand-side attrset or from this attrset. Values from the
+   * right-hand-side attrset override values from this attrset.
+   */
+  update(rhs: NixType): Attrset {
+    throw new EvalException(
+      `Cannot merge '${this.typeOf()}' with '${rhs.typeOf()}'. Can only merge attrset with attrset.`
+    );
+  }
+}
+
+export class NixBool extends NixType {
+  readonly value: boolean;
+
+  constructor(value: boolean) {
+    super();
+    this.value = value;
+  }
+
+  override asBoolean(): boolean {
+    return this.value;
+  }
+
+  typeOf(): string {
+    return "bool";
+  }
+
+  toJs(): boolean {
+    return this.value;
+  }
+
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof NixBool)) {
+      return FALSE;
+    }
+    return _nixBoolFromJs(this.value === rhs.value);
+  }
+}
+
+export abstract class Attrset extends NixType implements Scope {
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof Attrset)) {
+      return FALSE;
+    }
+    if (this.size() !== rhs.size()) {
+      return FALSE;
+    }
+    for (const key of this.keys()) {
+      if (!this.lookup(key).eq(rhs.lookup(key)).toJs()) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
+
+  /**
+   * Returns raw lazy values without evaluating them.
+   * Keys of this attrset will be strictly evaluated before this method returns.
+   * @param attrName the attribute name (the key) for which to fetch the value.
+   * @returns the value or the lazy placeholder of the value, or `undefined`, if the
+   * attribute doesn't exist.
+   */
+  get(attrName: NixType): undefined | NixType {
+    attrName = attrName.toStrict();
+    if (!(attrName instanceof NixString)) {
+      throw new EvalException(
+        `Attribute name must be a string but '${attrName.typeOf()}' given.`
+      );
+    }
+    return this.lookup(attrName.value);
+  }
+
+  /**
+   * Same as the `get(attrName: NixType)` function, but the `attrName` parameter is
+   * a JavaScript string.
+   */
+  lookup(attrName: string): NixType {
+    return this.underlyingMap().get(attrName);
+  }
+
+  override has(attrPath: NixType[]): NixBool {
+    let foundValue: NixType = this;
+    for (const attrName of attrPath) {
+      // It could be that the given value is still lazy. If we want to check
+      // if the value is an attrset, we need to evaluate the Lazy value.
+      foundValue = foundValue.toStrict();
+      if (!(foundValue instanceof Attrset)) {
+        return FALSE;
+      }
+      // We're using `get` here instead of `_strictSelect` because we're not
+      // interested in the value of the attribute but only whether the attribute
+      // exists or not. So, no need to evaluate the attribute value.
+      foundValue = foundValue.get(attrName);
+    }
+    return _nixBoolFromJs(foundValue !== undefined);
+  }
+
+  /**
+   * Returns an iterable of attribute names. The keys of this attrset will
+   * all be strictly evaluated before this method returns the iterable.
+   * Note that values will remain unevaluated (unless they are used in attribute
+   * names).
+   * @returns an iterable of attribute names in this attrset.
+   */
+  keys(): Iterable<string> {
+    return this.underlyingMap().keys();
+  }
+
+  override update(rhs: NixType): Attrset {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof Attrset)) {
+      return super.update(rhs);
+    }
+    let mergedMap = new Map(this.underlyingMap());
+    for (const attr of rhs.keys()) {
+      mergedMap.set(attr, rhs.lookup(attr));
+    }
+    return new StrictAttrset(mergedMap);
+  }
+
+  /**
+   * The number of keys in this attrset.
+   */
+  size(): number {
+    return this.underlyingMap().size;
+  }
+
+  typeOf(): string {
+    return "set";
+  }
+
+  /**
+   * Returns a copy of this attrset as a strict (fully-evaluated) JavaScript Map.
+   */
+  toJs(): Map<string, any> {
+    let jsMap = new Map();
+    for (const key of this.keys()) {
+      let value = this.lookup(key).toJs();
+      jsMap.set(key, value);
+    }
+    return jsMap;
+  }
+
+  /**
+   * Returns the underlying JS Map fully populated with strict keys (values will remain untouched, i.e. lazy).
+   * This should return the actual backing map of this attrset, not a copy.
+   */
+  abstract underlyingMap(): Map<string, NixType>;
+}
+
+export class StrictAttrset extends Attrset {
+  readonly map: Map<string, NixType>;
+
+  constructor(map: Map<string, NixType>) {
+    super();
+    this.map = map;
+  }
+
+  underlyingMap(): Map<string, NixType> {
+    return this.map;
+  }
+}
+
+export const EMPTY_ATTRSET = new StrictAttrset(new Map());
+
+class AttrsetBuilder {
+  entries: [attrPath: Body[], value: Body][];
+  evalCtx: EvalCtx;
+  // The final map into which this builder will insert fully-evaluated
+  // attrnames and their corresponding values.
+  map: Map<string, NixType>;
+  // The index of entry to be processed when building the attrset.
+  pendingEntryIdx: number = 0;
+
+  constructor(
+    evalCtx: EvalCtx,
+    isRecursive: boolean,
+    entries: [attrPath: Body[], value: Body][]
+  ) {
+    this.entries = entries;
+    this.evalCtx = isRecursive ? evalCtx.withShadowingScope(this) : evalCtx;
+  }
+
+  lookup(attrName: string): NixType {
+    return this.build().get(attrName);
+  }
+
+  build(): Map<string, NixType> {
+    // This method is re-entrant. This means that at any point while
+    // evaluating this method, this method might be called again. So,
+    // every re-entrant call must make some progress or detect
+    // infinite recursion.
+    let map = this.underlyingMap();
+    while (this.pendingEntryIdx < this.entries.length) {
+      const currentEntryIdx = this.pendingEntryIdx++;
+      const [attrPath, value] = this.entries[currentEntryIdx];
+      if (attrPath.length === 0) {
+        throw new EvalException(
+          "Cannot add an undefined attribute name to the attrset."
+        );
+      }
+      const attrName = attrPath[0](this.evalCtx).toStrict();
+
+      // It turns out `null` attrnames are ignored by nix.
+      if (attrName === NULL) {
+        continue;
+      }
+
+      const attrNameStr = attrName.asString();
+      const existingValue = map.get(attrNameStr);
+      let newValue = new Lazy(
+        this.evalCtx,
+        existingValue === undefined
+          ? (ctx) => entryToValue(ctx, attrPath.slice(1), value)
+          : (ctx) =>
+              buildAttrset(
+                ctx,
+                attrNameStr,
+                existingValue,
+                entryToValue(ctx, attrPath.slice(1), value)
+              )
+      );
+      map.set(attrNameStr, newValue);
+    }
+    return map;
+  }
+
+  underlyingMap(): Map<string, NixType> {
+    if (this.map === undefined) {
+      this.map = new Map();
+    }
+    return this.map;
+  }
+}
+
+export class LazyAttrset extends Attrset {
+  attrsetBuilder: AttrsetBuilder;
+  map: Map<string, NixType>;
+
+  constructor(
+    evalCtx: EvalCtx,
+    isRecursive: boolean,
+    entries: [attrPath: Body[], value: Body][]
+  ) {
+    super();
+    this.attrsetBuilder = new AttrsetBuilder(evalCtx, isRecursive, entries);
+  }
+
+  underlyingMap(): Map<string, NixType> {
+    if (this.map === undefined) {
+      this.map = this.attrsetBuilder.build();
+      this.attrsetBuilder = undefined;
+    }
+    return this.map;
+  }
+}
+
+export class NixFloat extends NixType {
+  readonly value: number;
+
+  constructor(value: number) {
+    super();
+    this.value = value;
+  }
+
+  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.value + rhs.value);
+    }
+    if (rhs instanceof NixInt) {
+      return new NixFloat(this.value + rhs.number);
+    }
+    return super.add(evalCtx, rhs);
+  }
+
+  override div(rhs: NixType): NixInt | NixFloat {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixFloat(this.value / rhs.number);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.value / rhs.value);
+    }
+    return super.div(rhs);
+  }
+
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return _nixBoolFromJs(this.value === rhs.number);
+    }
+    if (rhs instanceof NixFloat) {
+      return _nixBoolFromJs(this.value === rhs.value);
+    }
+    return FALSE;
+  }
+
+  override less(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return _nixBoolFromJs(this.value < rhs.number);
+    }
+    if (rhs instanceof NixFloat) {
+      return _nixBoolFromJs(this.value < rhs.value);
+    }
+    return super.less(rhs);
+  }
+
+  override mul(rhs: NixType): NixFloat | NixInt {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixFloat(this.value * rhs.number);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.value * rhs.value);
+    }
+    return super.mul(rhs);
+  }
+
+  override neg(): NixFloat | NixInt {
+    return new NixFloat(-this.value);
+  }
+
+  override sub(rhs: NixType): NixInt | NixFloat {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixFloat(this.value - rhs.number);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.value - rhs.value);
+    }
+    return super.sub(rhs);
+  }
+
+  toJs(): any {
+    return this.value;
+  }
+
+  typeOf(): string {
+    return "float";
+  }
 }
 
 export class NixInt extends NixType {
@@ -95,16 +557,216 @@ export class NixInt extends NixType {
     this.value[0] = value;
   }
 
-  typeOf(): string {
-    return "int";
-  }
-
   get number(): number {
     return Number(this.value[0]);
   }
 
   get int64(): bigint {
     return this.value[0];
+  }
+
+  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixInt(this.int64 + rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.number + rhs.value);
+    }
+    return super.add(evalCtx, rhs);
+  }
+
+  override div(rhs: NixType): NixInt | NixFloat {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixInt(this.int64 / rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.number / rhs.value);
+    }
+    return super.div(rhs);
+  }
+
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return _nixBoolFromJs(this.int64 === rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return _nixBoolFromJs(this.number === rhs.value);
+    }
+    return super.eq(rhs);
+  }
+
+  override less(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return _nixBoolFromJs(this.int64 < rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return _nixBoolFromJs(this.number < rhs.value);
+    }
+    return super.less(rhs);
+  }
+
+  override mul(rhs: NixType): NixInt | NixFloat {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixInt(this.int64 * rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.number * rhs.value);
+    }
+    return super.mul(rhs);
+  }
+
+  override neg(): NixInt | NixFloat {
+    return new NixInt(-this.int64);
+  }
+
+  override sub(rhs: NixType): NixInt | NixFloat {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixInt) {
+      return new NixInt(this.int64 - rhs.int64);
+    }
+    if (rhs instanceof NixFloat) {
+      return new NixFloat(this.number - rhs.value);
+    }
+    return super.sub(rhs);
+  }
+
+  toJs(): bigint {
+    return this.int64;
+  }
+
+  typeOf(): string {
+    return "int";
+  }
+}
+
+export class NixList extends NixType {
+  readonly values: NixType[];
+
+  constructor(values: NixType[]) {
+    super();
+    this.values = values;
+  }
+
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof NixList)) {
+      return FALSE;
+    }
+    if (this.values.length !== rhs.values.length) {
+      return FALSE;
+    }
+    for (let idx = 0; idx < this.values.length; idx++) {
+      if (!this.values[idx].eq(rhs.values[idx]).toJs()) {
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
+
+  override less(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof NixList)) {
+      return super.less(rhs);
+    }
+
+    const minLen = Math.min(this.values.length, rhs.values.length);
+    for (let idx = 0; idx < minLen; idx++) {
+      const currentLhs = this.values[idx];
+      const currentRhs = rhs.values[idx];
+      // This special-casing for booleans and nulls replicates nix's behaviour. Some examples:
+      // - nix evaluates this: `[true] < [true] == false` rather than trowing an exception,
+      // - the same for `[false] < [false] == false`, and
+      // - the same for `[null] < [null] == false`.
+      if (
+        (currentLhs === TRUE && currentRhs === TRUE) ||
+        (currentLhs === FALSE && currentRhs === FALSE)
+      ) {
+        continue;
+      }
+      if (currentLhs === NULL && currentRhs === NULL) {
+        continue;
+      }
+      if (currentLhs.less(currentRhs).toJs()) {
+        return TRUE;
+      }
+    }
+    return _nixBoolFromJs(this.values.length < rhs.values.length);
+  }
+
+  toJs(): NixType[] {
+    return this.values;
+  }
+
+  typeOf(): string {
+    return "list";
+  }
+}
+
+export class NixNull extends NixType {
+  override eq(rhs: NixType): NixBool {
+    return _nixBoolFromJs(rhs.toStrict() instanceof NixNull);
+  }
+
+  toJs(): boolean {
+    return null;
+  }
+
+  typeOf(): string {
+    return "null";
+  }
+}
+
+export const NULL = new NixNull();
+export const TRUE = new NixBool(true);
+export const FALSE = new NixBool(false);
+
+export class NixString extends NixType {
+  readonly value: string;
+
+  constructor(value: string) {
+    super();
+    this.value = value;
+  }
+
+  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    rhs = rhs.toStrict();
+    if (rhs instanceof NixString) {
+      return new NixString(this.value + rhs.value);
+    }
+    return super.add(evalCtx, rhs);
+  }
+
+  override asString(): string {
+    return this.value;
+  }
+
+  override eq(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof NixString)) {
+      return FALSE;
+    }
+    return _nixBoolFromJs(this.value === rhs.value);
+  }
+
+  override less(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof NixString)) {
+      return super.less(rhs);
+    }
+    return _nixBoolFromJs(this.value < rhs.value);
+  }
+
+  toJs(): string {
+    return this.value;
+  }
+
+  typeOf(): string {
+    return "string";
   }
 }
 
@@ -116,211 +778,143 @@ export class Path extends NixType {
     this.path = path;
   }
 
+  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    rhs = rhs.toStrict();
+    if (rhs instanceof Path) {
+      return toPath(evalCtx, joinPaths(this.path, rhs.path));
+    }
+    if (rhs instanceof NixString) {
+      return toPath(evalCtx, this.path + rhs.value);
+    }
+    return this;
+  }
+
+  toJs() {
+    return this.path;
+  }
+
   typeOf(): string {
     return "path";
   }
 }
 
-export class Lazy {
+export class Lazy extends NixType {
   body: Body;
   evalCtx: EvalCtx;
-  value: any;
+  value: NixType;
 
   constructor(evalCtx: EvalCtx, body: Body) {
+    super();
     this.body = body;
     this.evalCtx = evalCtx;
   }
 
-  getValue(): any {
+  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+    return this.toStrict().add(evalCtx, rhs);
+  }
+
+  override asBoolean(): boolean {
+    return this.toStrict().asBoolean();
+  }
+
+  override asString(): string {
+    return this.toStrict().asString();
+  }
+
+  override div(rhs: NixType): NixInt | NixFloat {
+    return this.toStrict().div(rhs);
+  }
+
+  override eq(rhs: NixType): NixBool {
+    return this.toStrict().eq(rhs);
+  }
+
+  override less(rhs: NixType): NixBool {
+    return this.toStrict().less(rhs);
+  }
+
+  override update(rhs: NixType): Attrset {
+    return this.toStrict().update(rhs);
+  }
+
+  override mul(rhs: NixType): NixInt | NixFloat {
+    return this.toStrict().mul(rhs);
+  }
+
+  override neg(): NixInt | NixFloat {
+    return this.toStrict().neg();
+  }
+
+  override neq(rhs: NixType): NixBool {
+    return this.toStrict().neq(rhs);
+  }
+
+  override sub(rhs: NixType): NixInt | NixFloat {
+    return this.toStrict().sub(rhs);
+  }
+
+  toJs() {
+    return this.toStrict().toJs();
+  }
+
+  override toStrict(): NixType {
     if (this.value === undefined) {
       this.value = this.body(this.evalCtx);
       // Now that we have evaluated this lazy value already, we don't have to do it again.
       // This means we can let go of the `body` and the `evalCtx` so they can be garbage-collected.
       this.body = undefined;
       this.evalCtx = undefined;
+
+      // Let's flatten any nested lazy values.
+      this.value = this.value.toStrict();
     }
     return this.value;
   }
-}
 
-// Arithmetic:
-export function neg(operand: any): any {
-  if (!isNumber(operand)) {
-    throw new EvalException(`Cannot negate '${typeOf(operand)}'.`);
+  typeOf(): string {
+    return this.toStrict().typeOf();
   }
-  if (operand instanceof NixInt) {
-    return new NixInt(-operand.value[0]);
-  }
-  return -operand;
-}
-
-export function add(evalCtx: EvalCtx, lhs: any, rhs: any): any {
-  switch (typeof lhs) {
-    case "number":
-      if (typeof rhs === "number") return lhs + rhs;
-      if (rhs instanceof NixInt) return lhs + rhs.number;
-      throw new EvalException(illegalAddMsg(lhs, rhs));
-    case "string":
-      if (typeof rhs === "string") return lhs + rhs;
-      // TODO: allow coercing 'Path' to string
-      throw new EvalException(illegalAddMsg(lhs, rhs));
-    case "object":
-      return addObjectWith(evalCtx, lhs, rhs);
-  }
-  throw new EvalException(illegalAddMsg(lhs, rhs));
-}
-
-function addObjectWith(evalCtx: EvalCtx, lhs: object, rhs: any): any {
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 + rhs.int64);
-    }
-    if (!isNumber(rhs)) {
-      throw new EvalException(illegalAddMsg(lhs, rhs));
-    }
-    return lhs.number + rhs;
-  }
-  if (lhs instanceof Path) {
-    if (typeof rhs === "string") return toPath(evalCtx, lhs.path + rhs);
-    if (rhs instanceof Path)
-      return toPath(evalCtx, joinPaths(lhs.path, rhs.path));
-  }
-  throw new EvalException(illegalAddMsg(lhs, rhs));
-}
-
-function illegalAddMsg(lhs: any, rhs: any) {
-  return `Cannot add '${typeOf(lhs)}' to '${typeOf(rhs)}'.`;
-}
-
-export function sub(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(lhs)) {
-    throw new EvalException(
-      `Cannot subtract '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 - rhs.int64);
-    }
-    return lhs.number - rhs;
-  }
-  if (rhs instanceof NixInt) {
-    return lhs - rhs.number;
-  }
-  return lhs - rhs;
-}
-
-export function mul(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvalException(
-      `Cannot multiply '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 * rhs.int64);
-    }
-    return lhs.number * rhs;
-  }
-  if (rhs instanceof NixInt) {
-    return lhs * rhs.number;
-  }
-  return lhs * rhs;
-}
-
-export function div(lhs: any, rhs: any): number | NixInt {
-  if (!isNumber(lhs) || !isNumber(rhs)) {
-    throw new EvalException(
-      `Cannot divide '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return new NixInt(lhs.int64 / rhs.int64);
-    }
-    return lhs.number / rhs;
-  }
-  if (rhs instanceof NixInt) {
-    return lhs / rhs.number;
-  }
-  return lhs / rhs;
 }
 
 // Attrset:
-export function attrpath(...attrs: any[]): string[] {
-  const invalidAttrSegment = attrs.find(
-    (attrSegment) => attrSegment !== null && typeof attrSegment !== "string"
-  );
-  if (invalidAttrSegment !== undefined) {
-    throw new EvalException(
-      `Attribute name is of type '${typeOf(
-        invalidAttrSegment
-      )}' but a string was expected.`
-    );
-  }
-  return attrs;
+export function attrset(evalCtx: EvalCtx, entries: [Body[], Body][]): Attrset {
+  return new LazyAttrset(evalCtx, false, entries);
 }
 
-export function attrset(
+export function recAttrset(
   evalCtx: EvalCtx,
-  entries: [string[], Body][]
+  entries: [Body[], Body][]
 ): Attrset {
-  return _buildAttrset(evalCtx, new Map(), entries);
-}
-
-// TODO: make it optional for attrset to be recursive.
-export function recursiveAttrset(
-  evalCtx: EvalCtx,
-  entries: [string[], Body][]
-): Attrset {
-  const newAttrset = new Map();
-  const innerCtx = evalCtx.withShadowingScope(newAttrset);
-  return _buildAttrset(innerCtx, newAttrset, entries);
-}
-
-function _buildAttrset(
-  evalCtx: EvalCtx,
-  newAttrset: Attrset,
-  entries: [string[], Body][]
-): Attrset {
-  for (const [attrpath, value] of entries) {
-    _setAttrpath(newAttrset, attrpath, new Lazy(evalCtx, value));
-  }
-  return newAttrset;
-}
-
-export function has(theAttrset: any, attrPath: string[]): boolean {
-  let foundValue = theAttrset;
-  for (const attr of attrPath) {
-    if (!(foundValue instanceof Map)) {
-      return false;
-    }
-    // We're using `get` here instead of `_strictSelect` because we're not
-    // interested in the value of the attribute but only whether the attribute
-    // exists or not. So, no need to evaluate the attribute value.
-    foundValue = foundValue.get(attr);
-  }
-  return foundValue !== undefined;
+  return new LazyAttrset(evalCtx, true, entries);
 }
 
 export function select(
-  theAttrset: any,
-  attrPath: string[],
-  defaultValue: any | undefined
-): any {
+  theAttrset: NixType,
+  attrPath: NixType[],
+  defaultValue: NixType | undefined
+): NixType {
+  theAttrset = theAttrset.toStrict();
+  if (!(theAttrset instanceof Attrset)) {
+    throw new EvalException(
+      `Cannot select attribute from '${theAttrset.typeOf()}'.`
+    );
+  }
+  let curAttrset: Attrset = theAttrset;
   const nestingDepth = attrPath.length - 1;
   for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
-    const attr = attrPath[nestingLevel];
-    // TODO: we should use `_strictSelect` here.
-    let nestedMap = theAttrset.get(attr);
-    if (!(nestedMap instanceof Map)) {
-      theAttrset = undefined;
-      break;
+    const attrName = attrPath[nestingLevel];
+    let nestedValue = curAttrset.get(attrName);
+    if (nestedValue === undefined) {
+      return defaultValue;
     }
-    theAttrset = nestedMap;
+    let nestedAttrset = nestedValue.toStrict();
+    if (!(nestedAttrset instanceof Attrset)) {
+      return defaultValue;
+    }
+    curAttrset = nestedAttrset;
   }
 
-  let value = _strictSelect(theAttrset, attrPath[nestingDepth]);
+  let value = curAttrset.get(attrPath[nestingDepth]);
 
   if (value === undefined) {
     if (defaultValue === undefined) {
@@ -332,256 +926,6 @@ export function select(
   return value;
 }
 
-function _strictSelect(theAttrset: Attrset, attrName: string): any {
-  let foundValue = undefined;
-  if (theAttrset !== undefined) {
-    foundValue = theAttrset.get(attrName);
-  }
-
-  if (foundValue === undefined) {
-    return undefined;
-  }
-
-  if (foundValue instanceof Lazy) {
-    const strictValue = foundValue.getValue();
-    theAttrset.set(attrName, strictValue);
-    return strictValue;
-  }
-
-  return foundValue;
-}
-
-export function update(lhs: any, rhs: any): Attrset {
-  if (!(lhs instanceof Map) || !(rhs instanceof Map)) {
-    throw new EvalException(
-      `Cannot apply operator '//' on '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
-    );
-  }
-
-  const resultMap = new Map(lhs);
-  for (const entry of rhs) {
-    resultMap.set(entry[0], entry[1]);
-  }
-  return resultMap;
-}
-
-function _setAttrpath(newAttrset: Attrset, attrpath: string[], value: any) {
-  const nestingDepth = attrpath.length - 1;
-  for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
-    const attr = attrpath[nestingLevel];
-    if (attr === null) {
-      return;
-    }
-    // TODO: Using `_strictSelect` here is a  from nix's behaviour.
-    // Nix currently throws an error while evaluating the following:
-    //   { a = builtins.trace "Evaluated" {}; a.b = 1; }
-    //   error: attribute 'a.b' already defined at
-    // In similar vein, `nix` throws evaluating this expression:
-    //   let c = {}; in { a = c; a.b = 1; }
-    // We should reproduce this here.
-    let nestedMap = _strictSelect(newAttrset, attr);
-    if (nestedMap === undefined) {
-      nestedMap = new Map<string, any>();
-      newAttrset.set(attr, nestedMap);
-    } else if (!(nestedMap instanceof Map)) {
-      throw new EvalException(
-        `Attribute '${attr}' is already defined and is not a attrset. Cannot set '${
-          attrpath[nestingLevel + 1]
-        }' inside.`
-      );
-    }
-    newAttrset = nestedMap;
-  }
-
-  const lastAttr = attrpath[nestingDepth];
-  if (lastAttr === null) {
-    return;
-  }
-  if (newAttrset.has(lastAttr)) {
-    throw new EvalException(`Attribute '${lastAttr}' already defined.`);
-  }
-  newAttrset.set(lastAttr, value);
-}
-
-// Boolean:
-export function and(lhs: any, rhs: any): boolean {
-  return asBoolean(lhs) && asBoolean(rhs);
-}
-
-export function implication(lhs: any, rhs: any): boolean {
-  return !asBoolean(lhs) || asBoolean(rhs);
-}
-
-export function invert(operand: any): boolean {
-  return !asBoolean(operand);
-}
-
-export function or(lhs: any, rhs: any): boolean {
-  return asBoolean(lhs) || asBoolean(rhs);
-}
-
-export function asBoolean(operand: any): boolean {
-  if (typeof operand !== "boolean") {
-    throw new EvalException(
-      `Value is '${typeOf(operand)}' but a boolean was expected.`
-    );
-  }
-  return operand;
-}
-
-// Comparison:
-export function eq(lhs: any, rhs: any): boolean {
-  switch (typeof lhs) {
-    case "number":
-      if (typeof rhs === "number") {
-        return lhs === rhs;
-      } else if (rhs instanceof NixInt) {
-        return lhs === rhs.number;
-      }
-      return false;
-    case "object":
-      return _object_eq(lhs, rhs);
-    default:
-      return lhs === rhs;
-  }
-}
-
-function _object_eq(lhs: Object, rhs: any): boolean {
-  if (lhs instanceof Map) {
-    return rhs instanceof Map && _attrsets_eq(lhs, rhs);
-  }
-  if (Array.isArray(lhs)) {
-    return Array.isArray(rhs) && _arrays_eq(lhs, rhs);
-  }
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return lhs.int64 === rhs.int64;
-    }
-    return lhs.number === rhs;
-  }
-  return lhs === rhs;
-}
-
-function _arrays_eq(lhs: Array<any>, rhs: Array<any>): boolean {
-  if (lhs.length !== rhs.length) {
-    return false;
-  }
-  for (let idx = 0; idx < lhs.length; idx++) {
-    if (!eq(lhs[idx], rhs[idx])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function _attrsets_eq(lhs: Attrset, rhs: Attrset): boolean {
-  if (lhs.size !== rhs.size) {
-    return false;
-  }
-  for (const key of lhs.keys()) {
-    // TODO: We should likely use `_strictSelect` here.
-    if (!eq(lhs.get(key), rhs.get(key))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-export function neq(lhs: any, rhs: any): boolean {
-  return !eq(lhs, rhs);
-}
-
-export function less(lhs: any, rhs: any): boolean {
-  if (lhs === null || rhs === null) {
-    _throwLessThanTypeError(lhs, rhs);
-  }
-
-  const lhsType = typeof lhs;
-  const rhsType = typeof rhs;
-  if (lhsType === rhsType) {
-    return _equalTypesLess(lhs, rhs);
-  }
-
-  return _numberLess(lhs, rhs);
-}
-
-export function less_eq(lhs: any, rhs: any): boolean {
-  return !less(rhs, lhs);
-}
-
-export function more(lhs: any, rhs: any): boolean {
-  return less(rhs, lhs);
-}
-
-export function more_eq(lhs: any, rhs: any): boolean {
-  return !less(lhs, rhs);
-}
-
-function _equalTypesLess(lhs: any, rhs: any): boolean {
-  switch (typeof lhs) {
-    case "object":
-      if (Array.isArray(lhs)) {
-        return _listLess(lhs, rhs);
-      }
-      return _numberLess(lhs, rhs);
-    case "boolean":
-      _throwLessThanTypeError(lhs, rhs);
-    default:
-      return lhs < rhs;
-  }
-}
-
-function _numberLess(lhs: any, rhs: any): boolean {
-  if (lhs instanceof NixInt) {
-    if (rhs instanceof NixInt) {
-      return lhs.value < rhs.value;
-    }
-    if (typeof rhs !== "number") {
-      _throwLessThanTypeError(lhs, rhs);
-    }
-    return lhs.value < rhs;
-  }
-  if (rhs instanceof NixInt) {
-    if (typeof lhs !== "number") {
-      _throwLessThanTypeError(lhs, rhs);
-    }
-    return lhs < rhs.value;
-  }
-
-  _throwLessThanTypeError(lhs, rhs);
-}
-
-function _listLess(lhs: Array<any>, rhs: Array<any>): boolean {
-  const minLen = Math.min(lhs.length, rhs.length);
-  for (let idx = 0; idx < minLen; idx++) {
-    const currentLhs = lhs[idx];
-    const currentRhs = rhs[idx];
-    // This special-casing for booleans and nulls replicates nix's behaviour. Some examples:
-    // - nix evaluates this: `[true] < [true] == false` rather than trowing an exception,
-    // - the same for `[false] < [false] == false`, and
-    // - the same for `[null] < [null] == false`.
-    if (
-      (currentLhs === true && currentRhs === true) ||
-      (currentLhs === false && currentRhs === false)
-    ) {
-      continue;
-    }
-    if (currentLhs === null && currentRhs === null) {
-      continue;
-    }
-    if (less(currentLhs, currentRhs)) {
-      return true;
-    }
-  }
-  return lhs.length < rhs.length;
-}
-
-function _throwLessThanTypeError(lhs: any, rhs: any): void {
-  throw new EvalException(
-    `Cannot compare '${typeOf(lhs)}' with '${typeOf(rhs)}'.`
-  );
-}
-
 // Lambda:
 export function paramLambda(
   evalCtx: EvalCtx,
@@ -591,7 +935,7 @@ export function paramLambda(
   return (param) => {
     let paramScope = new Map();
     paramScope.set(paramName, param);
-    return letIn(evalCtx, paramScope, body);
+    return letIn(evalCtx, new StrictAttrset(paramScope), body);
   };
 }
 
@@ -606,7 +950,7 @@ export function patternLambda(
     for (const [paramName, defaultValue] of patterns) {
       // We are using `get` here instead of `_strictSelect` because we're adding the
       // parameter to the function's scope. The parameter might be unused inside function.
-      let paramValue = param.get(paramName);
+      let paramValue = param.lookup(paramName);
       if (paramValue === undefined) {
         if (defaultValue === undefined) {
           throw new EvalException(
@@ -620,12 +964,12 @@ export function patternLambda(
     if (argsBind !== undefined) {
       paramScope.set(argsBind, param);
     }
-    return letIn(evalCtx, paramScope, body);
+    return letIn(evalCtx, new StrictAttrset(paramScope), body);
   };
 }
 
 // Let in:
-export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): any {
+export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): NixType {
   return body(evalCtx.withShadowingScope(attrs));
 }
 
@@ -633,7 +977,7 @@ export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): any {
 export function concat(lhs: any, rhs: any): Array<any> {
   if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
     throw new EvalException(
-      `Cannot concatenate '${typeOf(lhs)}' and '${typeOf(rhs)}'.`
+      `Cannot concatenate '${lhs.typeOf()}' and '${rhs.typeOf()}'.`
     );
   }
   return lhs.concat(rhs);
@@ -647,58 +991,20 @@ export function toPath(evalCtx: EvalCtx, path: string): Path {
   return new Path(normalizePath(path));
 }
 
-// String:
-export function interpolate(value: any): string {
-  if (typeof value !== "string") {
-    throw new EvalException(`Cannot coerce '${typeOf(value)}' to a string.`);
-  }
-  return value;
-}
-
-// Type functions:
-export function typeOf(object: any): string {
-  const object_type = typeof object;
-  switch (object_type) {
-    case "boolean":
-      return "bool";
-    case "number":
-      return "float";
-    case "object":
-      if (object === null) {
-        return "null";
-      }
-      if (object instanceof Map) {
-        return "set";
-      }
-      if (Array.isArray(object)) {
-        return "list";
-      }
-      if (object instanceof NixType) {
-        return object.typeOf();
-      }
-    default:
-      return object_type;
-  }
-}
-
 // Utilities:
-export function toStrict(value: any): any {
-  if (value instanceof Map) {
-    return toStrictAttrset(value);
+export function recursiveStrict(value: NixType): NixType {
+  if (value instanceof Attrset) {
+    return recursiveStrictAttrset(value);
   }
   return value;
 }
 
-export function toStrictAttrset(theAttrset: Attrset): Attrset {
+export function recursiveStrictAttrset(theAttrset: Attrset): Attrset {
   for (const key of theAttrset.keys()) {
-    const value = _strictSelect(theAttrset, key);
-    toStrict(value);
+    const value = theAttrset.lookup(key).toStrict();
+    recursiveStrict(value);
   }
   return theAttrset;
-}
-
-function isNumber(object: any): boolean {
-  return typeof object === "number" || object instanceof NixInt;
 }
 
 function isAbsolutePath(path: string): boolean {
@@ -729,6 +1035,64 @@ function normalizePath(path: string): string {
   return (isAbsolutePath(path) ? "/" : "") + normalizedSegments.join("/");
 }
 
+function entryToValue(ctx: EvalCtx, attrPath: Body[], value: Body): NixType {
+  if (attrPath.length === 0) {
+    return new Lazy(ctx, value);
+  }
+
+  let attrName = attrPath[0](ctx).toStrict();
+
+  // It turns out `null` attrnames are ignored by nix.
+  if (attrName === NULL) {
+    return EMPTY_ATTRSET;
+  }
+
+  let map = new Map();
+  map.set(
+    attrName.asString(),
+    new Lazy(ctx, (ctx) => entryToValue(ctx, attrPath.slice(1), value))
+  );
+  return new StrictAttrset(map);
+}
+
+function buildAttrset(
+  ctx: EvalCtx,
+  attrName: string,
+  lhsAttrset: NixType,
+  rhsAttrset: NixType
+): Attrset {
+  lhsAttrset = lhsAttrset.toStrict();
+  if (!(lhsAttrset instanceof Attrset)) {
+    throw new EvalException(`Attribute '${attrName}' already defined.`);
+  }
+  rhsAttrset = rhsAttrset.toStrict();
+  if (!(rhsAttrset instanceof Attrset)) {
+    throw new EvalException(`Attribute '${attrName}' already defined.`);
+  }
+
+  let mergedMap = new Map(lhsAttrset.underlyingMap());
+  for (const nestedAttrName of rhsAttrset.keys()) {
+    let existingValue = mergedMap.get(nestedAttrName);
+    let mergedNestedValue = rhsAttrset.lookup(nestedAttrName);
+    if (existingValue !== undefined) {
+      mergedNestedValue = new Lazy(ctx, (ctx) =>
+        buildAttrset(
+          ctx,
+          `${attrName}.${nestedAttrName}`,
+          existingValue,
+          mergedNestedValue
+        )
+      );
+    }
+    mergedMap.set(nestedAttrName, mergedNestedValue);
+  }
+  return new StrictAttrset(mergedMap);
+}
+
+function _nixBoolFromJs(value: boolean): NixBool {
+  return value ? TRUE : FALSE;
+}
+
 // With:
 export function withExpr(
   evalCtx: EvalCtx,
@@ -739,42 +1103,31 @@ export function withExpr(
 }
 
 export default {
+  // Constants:
+  EMPTY_ATTRSET,
+  FALSE,
+  NULL,
+  TRUE,
+
   // Types:
+  Attrset,
   EvalCtx,
   EvalException,
   Lazy,
+  LazyAttrset,
+  NixBool,
+  NixFloat,
   NixInt,
+  NixList,
+  NixNull,
+  NixString,
   Path,
-
-  // Arithmetic:
-  add,
-  div,
-  mul,
-  neg,
-  sub,
+  StrictAttrset,
 
   // Attrset:
-  attrpath,
   attrset,
-  has,
-  recursiveAttrset,
+  recAttrset,
   select,
-  update,
-
-  // Boolean:
-  and,
-  asBoolean,
-  implication,
-  invert,
-  or,
-
-  // Comparison:
-  eq,
-  more_eq,
-  more,
-  less_eq,
-  less,
-  neq,
 
   // Lambda:
   paramLambda,
@@ -789,15 +1142,9 @@ export default {
   // Path:
   toPath,
 
-  // String:
-  interpolate,
-
-  // Type functions:
-  typeOf,
-
   // Utilies:
-  toStrict,
-  toStrictAttrset,
+  toStrict: recursiveStrict,
+  toStrictAttrset: recursiveStrictAttrset,
 
   // With:
   withExpr,
