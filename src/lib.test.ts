@@ -679,19 +679,21 @@ test("'Lazy.toStrict' drops the body and the evaluation context", () => {
 
 // List:
 test("'++' operator", () => {
-  const list_1 = [1];
-  const list_2 = [2];
-  expect(n.concat(list_1, list_2)).toStrictEqual([1, 2]);
+  const list_1 = new NixList([new NixFloat(1)]);
+  const list_2 = new NixList([new NixFloat(2)]);
+  expect(list_1.concat(list_2)).toStrictEqual(
+    new NixList([new NixFloat(1), new NixFloat(2)])
+  );
   // Here's we're verifying that neither of the operands is mutated.
-  expect(list_1).toStrictEqual([1]);
-  expect(list_2).toStrictEqual([2]);
+  expect(list_1).toStrictEqual(new NixList([new NixFloat(1)]));
+  expect(list_2).toStrictEqual(new NixList([new NixFloat(2)]));
 });
 
 test("'++' operator on non-lists raises exceptions", () => {
-  expect(() => n.concat(new NixList([]), new NixFloat(1))).toThrow(
+  expect(() => new NixList([]).concat(new NixFloat(1))).toThrow(
     n.EvalException
   );
-  expect(() => n.concat(n.TRUE, new NixList([]))).toThrow(n.EvalException);
+  expect(() => n.TRUE.concat(new NixList([]))).toThrow(n.EvalException);
 });
 
 // Path:

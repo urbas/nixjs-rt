@@ -115,6 +115,12 @@ export abstract class NixType {
     );
   }
 
+  concat(other: NixType): NixList {
+    throw new EvalException(
+      `Cannot concatenate '${this.typeOf()}' and '${other.typeOf()}'.`
+    );
+  }
+
   /**
    * This method implements the `==` operator. It compares the `rhs` value with this value for equality.
    */
@@ -687,6 +693,13 @@ export class NixList extends NixType {
     this.values = values;
   }
 
+  override concat(other: NixType): NixList {
+    if (other instanceof NixList) {
+      return new NixList(this.values.concat(other.values));
+    }
+    return super.concat(other);
+  }
+
   override eq(rhs: NixType): NixBool {
     rhs = rhs.toStrict();
     if (!(rhs instanceof NixList)) {
@@ -856,6 +869,10 @@ export class Lazy extends NixType {
     return this.toStrict().asString();
   }
 
+  override concat(other: NixType): NixList {
+    return this.toStrict().concat(other);
+  }
+
   override div(rhs: NixType): NixInt | NixFloat {
     return this.toStrict().div(rhs);
   }
@@ -975,16 +992,6 @@ export function patternLambda(
 // Let in:
 export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): NixType {
   return body(evalCtx.withShadowingScope(attrs));
-}
-
-// List:
-export function concat(lhs: any, rhs: any): Array<any> {
-  if (!Array.isArray(lhs) || !Array.isArray(rhs)) {
-    throw new EvalException(
-      `Cannot concatenate '${lhs.typeOf()}' and '${rhs.typeOf()}'.`
-    );
-  }
-  return lhs.concat(rhs);
 }
 
 // Path:
@@ -1138,9 +1145,6 @@ export default {
 
   // Let in:
   letIn,
-
-  // List:
-  concat,
 
   // Path:
   toPath,
