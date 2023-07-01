@@ -85,7 +85,7 @@ export abstract class NixType {
   /**
    * This method implements the `+` operator. It adds the `rhs` value to this value.
    */
-  add(evalCtx: EvalCtx, rhs: NixType): NixType {
+  add(rhs: NixType): NixType {
     // TODO: can we get rid of the EvalCtx? It's needed when joining paths. Maybe we can store
     // the required context needed by paths in themselves rather than passing it here?
     throw new EvalException(
@@ -510,7 +510,7 @@ export class NixFloat extends NixType {
     this.value = value;
   }
 
-  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+  override add(rhs: NixType): NixType {
     rhs = rhs.toStrict();
     if (rhs instanceof NixFloat) {
       return new NixFloat(this.value + rhs.value);
@@ -518,7 +518,7 @@ export class NixFloat extends NixType {
     if (rhs instanceof NixInt) {
       return new NixFloat(this.value + rhs.number);
     }
-    return super.add(evalCtx, rhs);
+    return super.add(rhs);
   }
 
   override div(rhs: NixType): NixInt | NixFloat {
@@ -606,7 +606,7 @@ export class NixInt extends NixType {
     return this.value[0];
   }
 
-  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+  override add(rhs: NixType): NixType {
     rhs = rhs.toStrict();
     if (rhs instanceof NixInt) {
       return new NixInt(this.int64 + rhs.int64);
@@ -614,7 +614,7 @@ export class NixInt extends NixType {
     if (rhs instanceof NixFloat) {
       return new NixFloat(this.number + rhs.value);
     }
-    return super.add(evalCtx, rhs);
+    return super.add(rhs);
   }
 
   override div(rhs: NixType): NixInt | NixFloat {
@@ -781,12 +781,12 @@ export class NixString extends NixType {
     this.value = value;
   }
 
-  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+  override add(rhs: NixType): NixType {
     rhs = rhs.toStrict();
     if (rhs instanceof NixString) {
       return new NixString(this.value + rhs.value);
     }
-    return super.add(evalCtx, rhs);
+    return super.add(rhs);
   }
 
   override asString(): string {
@@ -826,13 +826,13 @@ export class Path extends NixType {
     this.path = path;
   }
 
-  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
+  override add(rhs: NixType): NixType {
     rhs = rhs.toStrict();
     if (rhs instanceof Path) {
-      return toPath(evalCtx, joinPaths(this.path, rhs.path));
+      return new Path(normalizePath(joinPaths(this.path, rhs.path)));
     }
     if (rhs instanceof NixString) {
-      return toPath(evalCtx, this.path + rhs.value);
+      return new Path(normalizePath(this.path + rhs.value));
     }
     return this;
   }
@@ -857,8 +857,8 @@ export class Lazy extends NixType {
     this.evalCtx = evalCtx;
   }
 
-  override add(evalCtx: EvalCtx, rhs: NixType): NixType {
-    return this.toStrict().add(evalCtx, rhs);
+  override add(rhs: NixType): NixType {
+    return this.toStrict().add(rhs);
   }
 
   override asBoolean(): boolean {
