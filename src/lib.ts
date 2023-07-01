@@ -173,6 +173,10 @@ export abstract class NixType {
     return _nixBoolFromJs(this.asBoolean() || rhs.asBoolean());
   }
 
+  select(attrPath: NixType[], defaultValue: NixType | undefined): NixType {
+    throw new EvalException(`Cannot select attribute from '${this.typeOf()}'.`);
+  }
+
   /**
    * This method implements the `-` operator. It subtracts the `rhs` value from this value.
    */
@@ -312,16 +316,35 @@ export abstract class Attrset extends NixType implements Scope {
     return this.underlyingMap().keys();
   }
 
-  override update(rhs: NixType): Attrset {
-    rhs = rhs.toStrict();
-    if (!(rhs instanceof Attrset)) {
-      return super.update(rhs);
+  override select(
+    attrPath: NixType[],
+    defaultValue: NixType | undefined
+  ): NixType {
+    let curAttrset: Attrset = this;
+    const nestingDepth = attrPath.length - 1;
+    for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
+      const attrName = attrPath[nestingLevel];
+      let nestedValue = curAttrset.get(attrName);
+      if (nestedValue === undefined) {
+        return defaultValue;
+      }
+      let nestedAttrset = nestedValue.toStrict();
+      if (!(nestedAttrset instanceof Attrset)) {
+        return defaultValue;
+      }
+      curAttrset = nestedAttrset;
     }
-    let mergedMap = new Map(this.underlyingMap());
-    for (const attr of rhs.keys()) {
-      mergedMap.set(attr, rhs.lookup(attr));
+
+    let value = curAttrset.get(attrPath[nestingDepth]);
+
+    if (value === undefined) {
+      if (defaultValue === undefined) {
+        throw new EvalException(`Attribute '${attrPath}' is missing.`);
+      }
+      return defaultValue;
     }
-    return new StrictAttrset(mergedMap);
+
+    return value;
   }
 
   /**
@@ -352,6 +375,18 @@ export abstract class Attrset extends NixType implements Scope {
    * This should return the actual backing map of this attrset, not a copy.
    */
   abstract underlyingMap(): Map<string, NixType>;
+
+  override update(rhs: NixType): Attrset {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof Attrset)) {
+      return super.update(rhs);
+    }
+    let mergedMap = new Map(this.underlyingMap());
+    for (const attr of rhs.keys()) {
+      mergedMap.set(attr, rhs.lookup(attr));
+    }
+    return new StrictAttrset(mergedMap);
+  }
 }
 
 export class StrictAttrset extends Attrset {
@@ -849,6 +884,13 @@ export class Lazy extends NixType {
     return this.toStrict().neq(rhs);
   }
 
+  override select(
+    attrPath: NixType[],
+    defaultValue: NixType | undefined
+  ): NixType {
+    return this.toStrict().select(attrPath, defaultValue);
+  }
+
   override sub(rhs: NixType): NixInt | NixFloat {
     return this.toStrict().sub(rhs);
   }
@@ -886,44 +928,6 @@ export function recAttrset(
   entries: [Body[], Body][]
 ): Attrset {
   return new LazyAttrset(evalCtx, true, entries);
-}
-
-export function select(
-  theAttrset: NixType,
-  attrPath: NixType[],
-  defaultValue: NixType | undefined
-): NixType {
-  theAttrset = theAttrset.toStrict();
-  if (!(theAttrset instanceof Attrset)) {
-    throw new EvalException(
-      `Cannot select attribute from '${theAttrset.typeOf()}'.`
-    );
-  }
-  let curAttrset: Attrset = theAttrset;
-  const nestingDepth = attrPath.length - 1;
-  for (let nestingLevel = 0; nestingLevel < nestingDepth; nestingLevel++) {
-    const attrName = attrPath[nestingLevel];
-    let nestedValue = curAttrset.get(attrName);
-    if (nestedValue === undefined) {
-      return defaultValue;
-    }
-    let nestedAttrset = nestedValue.toStrict();
-    if (!(nestedAttrset instanceof Attrset)) {
-      return defaultValue;
-    }
-    curAttrset = nestedAttrset;
-  }
-
-  let value = curAttrset.get(attrPath[nestingDepth]);
-
-  if (value === undefined) {
-    if (defaultValue === undefined) {
-      throw new EvalException(`Attribute '${attrPath}' is missing.`);
-    }
-    return defaultValue;
-  }
-
-  return value;
 }
 
 // Lambda:
@@ -1127,7 +1131,6 @@ export default {
   // Attrset:
   attrset,
   recAttrset,
-  select,
 
   // Lambda:
   paramLambda,
