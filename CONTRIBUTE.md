@@ -43,6 +43,12 @@ npm run test-watch
 npm run fmt
 ```
 
+# Debugging
+
+1. Use the `Debug: JavaScript Debug Terminal` action and VSCode will open a new terminal.
+2. Now set a breakpoint somewhere in your code.
+3. Run tests with `npm run test` and VSCode will break at the given breakpoint.
+
 ## Updating dependencies
 
 Update the version of NodeJS:
