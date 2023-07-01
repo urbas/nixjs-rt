@@ -299,67 +299,49 @@ test("'?' operator on other types returns false", () => {
 
 test("'.' operator", () => {
   expect(
-    n
-      .select(
-        attrset(evalCtx, [keyVal("a", (_) => new NixFloat(1))]),
-        [new NixString("a")],
-        undefined
-      )
+    attrset(evalCtx, [keyVal("a", (_) => new NixFloat(1))])
+      .select([new NixString("a")], undefined)
       .toJs()
   ).toBe(1);
 
   expect(
-    n
-      .select(
-        attrset(evalCtx, [keyVal("a.b", (_) => new NixFloat(1))]),
-        [new NixString("a"), new NixString("b")],
-        undefined
-      )
+    attrset(evalCtx, [keyVal("a.b", (_) => new NixFloat(1))])
+      .select([new NixString("a"), new NixString("b")], undefined)
       .toJs()
   ).toBe(1);
   expect(
-    n.select(attrset(evalCtx, []), [new NixString("a")], new NixFloat(1))
+    attrset(evalCtx, []).select([new NixString("a")], new NixFloat(1))
   ).toStrictEqual(new NixFloat(1));
   expect(
-    n
-      .select(
-        attrset(evalCtx, [keyVal("a.a", (_) => new NixFloat(1))]),
-        [new NixString("a"), new NixString("b")],
-        new NixFloat(1)
-      )
+    attrset(evalCtx, [keyVal("a.a", (_) => new NixFloat(1))])
+      .select([new NixString("a"), new NixString("b")], new NixFloat(1))
       .toJs()
   ).toBe(1);
   expect(
     n
-      .select(
-        n.attrset(evalCtx, [
-          keyVal("a", (_) => new NixFloat(1)),
-          keyVal("b.c", (_) => new NixFloat(2)),
-        ]),
-        [new NixString("a"), new NixString("c")],
-        new NixFloat(5)
-      )
+      .attrset(evalCtx, [
+        keyVal("a", (_) => new NixFloat(1)),
+        keyVal("b.c", (_) => new NixFloat(2)),
+      ])
+      .select([new NixString("a"), new NixString("c")], new NixFloat(5))
       .toJs()
   ).toBe(5);
 });
 
 test("'.' operator throws when attrpath doesn't exist", () => {
   expect(() =>
-    n.select(attrset(evalCtx, []), [new NixString("a")], undefined)
+    attrset(evalCtx, []).select([new NixString("a")], undefined)
   ).toThrow(n.EvalException);
 });
 
 test("recursive attrsets allow referencing attributes defined later", () => {
   expect(
     n
-      .select(
-        n.recAttrset(evalCtx, [
-          keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
-          keyVal("b", (_) => new NixFloat(1)),
-        ]),
-        [new NixString("a")],
-        undefined
-      )
+      .recAttrset(evalCtx, [
+        keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
+        keyVal("b", (_) => new NixFloat(1)),
+      ])
+      .select([new NixString("a")], undefined)
       .toJs()
   ).toBe(2);
 });
@@ -399,14 +381,11 @@ test("recursive attrsets allow referencing attributes from other attribute names
 test("non-recursive attrsets don't allow references to other attributes in the attrset", () => {
   expect(() =>
     n
-      .select(
-        n.attrset(evalCtx, [
-          keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
-          keyVal("b", (_) => new NixFloat(1)),
-        ]),
-        [new NixString("a")],
-        undefined
-      )
+      .attrset(evalCtx, [
+        keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
+        keyVal("b", (_) => new NixFloat(1)),
+      ])
+      .select([new NixString("a")], undefined)
       .toJs()
   ).toThrow(n.EvalException);
 });
@@ -665,7 +644,7 @@ test("pattern lambda with arguments binding", () => {
   expect(
     n
       .patternLambda(evalCtx, "args", [["a", undefined]], (evalCtx) =>
-        n.select(evalCtx.lookup("args"), [new NixString("a")], undefined)
+        evalCtx.lookup("args").select([new NixString("a")], undefined)
       )(arg)
       .toJs()
   ).toBe(1);
