@@ -26,17 +26,14 @@ test("unary '-' operator on floats", () => {
 });
 
 test("unary '-' operator on non-numbers", () => {
-  expect(() => new n.NixString("a").neg()).toThrow(n.EvalException);
+  expect(() => new NixString("a").neg()).toThrow(n.EvalException);
 });
 
 test("'+' operator on integers", () => {
-  expect((new NixInt(1n).add(evalCtx, new NixInt(2n)) as NixInt).number).toBe(
-    3
-  );
+  expect((new NixInt(1n).add(new NixInt(2n)) as NixInt).number).toBe(3);
   expect(
     (
       new NixInt(4611686018427387904n).add(
-        evalCtx,
         new NixInt(4611686018427387904n)
       ) as NixInt
     ).int64
@@ -44,56 +41,42 @@ test("'+' operator on integers", () => {
 });
 
 test("'+' operator on floats", () => {
-  expect(new NixFloat(1.0).add(evalCtx, new NixFloat(2.0)).toJs()).toBe(3);
+  expect(new NixFloat(1.0).add(new NixFloat(2.0)).toJs()).toBe(3);
 });
 
 test("'+' operator on mixed integers and floats", () => {
-  expect(new NixInt(1n).add(evalCtx, new NixFloat(2.0)).toJs()).toBe(3.0);
-  expect(new NixFloat(2.0).add(evalCtx, new NixInt(1n)).toJs()).toBe(3.0);
+  expect(new NixInt(1n).add(new NixFloat(2.0)).toJs()).toBe(3.0);
+  expect(new NixFloat(2.0).add(new NixInt(1n)).toJs()).toBe(3.0);
 });
 
 test("'+' operator on mixed numbers and non-numbers", () => {
-  expect(() => new n.NixString("a").add(evalCtx, new NixInt(1n))).toThrow(
+  expect(() => new NixString("a").add(new NixInt(1n))).toThrow(n.EvalException);
+  expect(() => new NixInt(1n).add(new NixString("a"))).toThrow(n.EvalException);
+  expect(() => new NixFloat(1).add(new NixString("a"))).toThrow(
     n.EvalException
   );
-  expect(() => new NixInt(1n).add(evalCtx, new n.NixString("a"))).toThrow(
-    n.EvalException
-  );
-  expect(() => new NixFloat(1).add(evalCtx, new n.NixString("a"))).toThrow(
-    n.EvalException
-  );
-  expect(() => new n.NixString("a").add(evalCtx, new NixFloat(1))).toThrow(
+  expect(() => new NixString("a").add(new NixFloat(1))).toThrow(
     n.EvalException
   );
 });
 
 test("'+' operator on strings", () => {
-  expect(new n.NixString("a").add(evalCtx, new n.NixString("b")).toJs()).toBe(
-    "ab"
-  );
+  expect(new NixString("a").add(new NixString("b")).toJs()).toBe("ab");
 });
 
 test("'+' operator on paths and strings", () => {
-  expect(new Path("/").add(evalCtx, new n.NixString("b"))).toStrictEqual(
-    new Path("/b")
-  );
-  expect(new Path("/a").add(evalCtx, new n.NixString("b"))).toStrictEqual(
-    new Path("/ab")
-  );
-  expect(new Path("/").add(evalCtx, new n.NixString("/"))).toStrictEqual(
-    new Path("/")
-  );
-  expect(new Path("/").add(evalCtx, new n.NixString("."))).toStrictEqual(
-    new Path("/")
-  );
-  expect(new Path("/").add(evalCtx, new n.NixString("./a"))).toStrictEqual(
-    new Path("/a")
-  );
+  expect(new Path("/").add(new NixString("b"))).toStrictEqual(new Path("/b"));
+  expect(new Path("/a").add(new NixString("b"))).toStrictEqual(new Path("/ab"));
+  expect(new Path("/").add(new NixString("/"))).toStrictEqual(new Path("/"));
+  expect(new Path("/").add(new NixString("."))).toStrictEqual(new Path("/"));
+  expect(new Path("/a").add(new NixString("."))).toStrictEqual(new Path("/a."));
+  expect(new Path("/").add(new NixString("./a"))).toStrictEqual(new Path("/a"));
 });
 
 test("'+' operator on paths", () => {
-  expect(new Path("/").add(evalCtx, new Path("/a"))).toStrictEqual(
-    new Path("/a")
+  expect(new Path("/").add(new Path("/a"))).toStrictEqual(new Path("/a"));
+  expect(n.toPath(evalCtx, "./a").add(n.toPath(evalCtx, "./b"))).toStrictEqual(
+    new Path("/test_base/a/test_base/b")
   );
 });
 
@@ -112,10 +95,10 @@ test("'-' operator on mixed integers and floats", () => {
 });
 
 test("'-' operator on non-numbers raises exceptions", () => {
-  expect(() => new n.NixString("foo").sub(new NixFloat(1))).toThrow(
+  expect(() => new NixString("foo").sub(new NixFloat(1))).toThrow(
     n.EvalException
   );
-  expect(() => new NixFloat(1).sub(new n.NixString("foo"))).toThrow(
+  expect(() => new NixFloat(1).sub(new NixString("foo"))).toThrow(
     n.EvalException
   );
 });
@@ -137,13 +120,13 @@ test("'*' operator on mixed integers and floats", () => {
 });
 
 test("'*' operator on non-numbers raises exceptions", () => {
-  expect(() => new n.NixString("foo").mul(new n.NixString("bar"))).toThrow(
+  expect(() => new NixString("foo").mul(new NixString("bar"))).toThrow(
     n.EvalException
   );
-  expect(() => new n.NixString("foo").mul(new NixFloat(1))).toThrow(
+  expect(() => new NixString("foo").mul(new NixFloat(1))).toThrow(
     n.EvalException
   );
-  expect(() => new n.NixString("foo").mul(new NixInt(1n))).toThrow(
+  expect(() => new NixString("foo").mul(new NixInt(1n))).toThrow(
     n.EvalException
   );
 });
@@ -168,13 +151,13 @@ test("'/' operator on mixed integers and floats", () => {
 });
 
 test("'/' operator on non-numbers raises exceptions", () => {
-  expect(() => new n.NixString("foo").div(new n.NixString("bar"))).toThrow(
+  expect(() => new NixString("foo").div(new NixString("bar"))).toThrow(
     n.EvalException
   );
-  expect(() => new n.NixString("foo").div(new NixFloat(1))).toThrow(
+  expect(() => new NixString("foo").div(new NixFloat(1))).toThrow(
     n.EvalException
   );
-  expect(() => new n.NixString("foo").div(new NixInt(1n))).toThrow(
+  expect(() => new NixString("foo").div(new NixInt(1n))).toThrow(
     n.EvalException
   );
 });
@@ -338,7 +321,7 @@ test("recursive attrsets allow referencing attributes defined later", () => {
   expect(
     n
       .recAttrset(evalCtx, [
-        keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
+        keyVal("a", (ctx) => ctx.lookup("b").add(new NixFloat(1))),
         keyVal("b", (_) => new NixFloat(1)),
       ])
       .select([new NixString("a")], undefined)
@@ -382,7 +365,7 @@ test("non-recursive attrsets don't allow references to other attributes in the a
   expect(() =>
     n
       .attrset(evalCtx, [
-        keyVal("a", (ctx) => ctx.lookup("b").add(ctx, new NixFloat(1))),
+        keyVal("a", (ctx) => ctx.lookup("b").add(new NixFloat(1))),
         keyVal("b", (_) => new NixFloat(1)),
       ])
       .select([new NixString("a")], undefined)
@@ -474,7 +457,7 @@ test("'==' operator on lists", () => {
 test("'==' operator on nulls", () => {
   expect(n.NULL.eq(n.NULL)).toBe(n.TRUE);
   expect(n.NULL.eq(new NixFloat(1))).toBe(n.FALSE);
-  expect(new n.NixString("a").eq(n.NULL)).toBe(n.FALSE);
+  expect(new NixString("a").eq(n.NULL)).toBe(n.FALSE);
 });
 
 test("'==' operator on attrsets", () => {
@@ -654,7 +637,7 @@ test("pattern lambda with arguments binding", () => {
 test("'Lazy.toStrict' evaluates the body only once", () => {
   let sentinel = new NixFloat(0);
   let lazyValue = new n.Lazy(evalCtx, (evalCtx) => {
-    sentinel = sentinel.add(evalCtx, new NixFloat(1)) as NixFloat;
+    sentinel = sentinel.add(new NixFloat(1)) as NixFloat;
     return sentinel;
   });
   expect(lazyValue.toStrict().toJs()).toEqual(1);
@@ -705,6 +688,7 @@ test("toPath on absolute paths", () => {
 
 test("toPath transforms relative paths with 'joinPaths'", () => {
   expect(n.toPath(evalCtx, "a")).toStrictEqual(new Path("/test_base/a"));
+  expect(n.toPath(evalCtx, "./a")).toStrictEqual(new Path("/test_base/a"));
 });
 
 // Scope:
@@ -725,7 +709,7 @@ test("variable in shadowing scope", () => {
 test("typeOf", () => {
   expect(new NixInt(1n).typeOf()).toBe("int");
   expect(new NixFloat(5.0).typeOf()).toBe("float");
-  expect(new n.NixString("a").typeOf()).toBe("string");
+  expect(new NixString("a").typeOf()).toBe("string");
   expect(n.TRUE.typeOf()).toBe("bool");
   expect(n.NULL.typeOf()).toBe("null");
   expect(new NixList([]).typeOf()).toBe("list");
