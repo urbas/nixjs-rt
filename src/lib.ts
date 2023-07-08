@@ -1,10 +1,7 @@
 // Types:
 export class EvalException extends Error {
-  readonly message: string;
-
   constructor(message: string) {
-    super();
-    this.message = message;
+    super(message);
   }
 }
 
@@ -411,9 +408,14 @@ export class StrictAttrset extends Attrset {
 }
 
 export const EMPTY_ATTRSET = new StrictAttrset(new Map());
+export type AttrsetBody = (
+  ctx: EvalCtx
+) => [attrPath: NixType[], value: NixType][];
 
 class AttrsetBuilder implements Scope {
-  entries: [attrPath: InnerAttrPath, value: Body][];
+  // What if this was
+  attrsetBody: AttrsetBody;
+  entries: [attrPath: NixType[], value: NixType][];
   evalCtx: EvalCtx;
   // The final map into which this builder will insert fully-evaluated
   // attrnames and their corresponding values.
@@ -424,10 +426,10 @@ class AttrsetBuilder implements Scope {
   constructor(
     evalCtx: EvalCtx,
     isRecursive: boolean,
-    entries: [attrPath: InnerAttrPath, value: Body][]
+    attrsetBody: AttrsetBody
   ) {
-    this.entries = entries;
     this.evalCtx = isRecursive ? evalCtx.withShadowingScope(this) : evalCtx;
+    this.attrsetBody = attrsetBody;
   }
 
   build(): Map<string, NixType> {
@@ -438,34 +440,30 @@ class AttrsetBuilder implements Scope {
     let map = this.underlyingMap();
     while (this.pendingEntryIdx < this.entries.length) {
       const currentEntryIdx = this.pendingEntryIdx++;
-      const [rawAttrPath, value] = this.entries[currentEntryIdx];
-      const attrPath = rawAttrPath(this.evalCtx);
+      const [attrPath, value] = this.entries[currentEntryIdx];
       if (attrPath.length === 0) {
         throw new EvalException(
           "Cannot add an undefined attribute name to the attrset."
         );
       }
       const attrName = attrPath[0].toStrict();
+      const currentValue = _attrPathToValue(this.evalCtx, attrPath, value);
 
-      // It turns out `null` attrnames are ignored by nix.
-      if (attrName === NULL) {
+      if (currentValue === undefined) {
         continue;
       }
 
       const attrNameStr = attrName.asString();
       const existingValue = map.get(attrNameStr);
-      let newValue = new Lazy(
-        this.evalCtx,
-        existingValue === undefined
-          ? (ctx) => entryToValue(ctx, attrPath.slice(1), value)
-          : (ctx) =>
-              buildAttrset(
-                ctx,
+      let newValue =
+        existingValue !== undefined
+          ? new Lazy(this.evalCtx, (ctx) =>
+              _recursiveDisjointMerge(ctx, existingValue, currentValue, [
                 attrNameStr,
-                existingValue,
-                entryToValue(ctx, attrPath.slice(1), value)
-              )
-      );
+              ])
+            )
+          : currentValue;
+
       map.set(attrNameStr, newValue);
     }
     return map;
@@ -477,21 +475,59 @@ class AttrsetBuilder implements Scope {
 
   underlyingMap(): Map<string, NixType> {
     if (this.map === undefined) {
+      this.entries = this.attrsetBody(this.evalCtx);
+      this.attrsetBody = undefined;
       this.map = new Map();
     }
     return this.map;
   }
 }
 
+function _recursiveDisjointMerge(
+  ctx: EvalCtx,
+  lhs: NixType,
+  rhs: NixType,
+  attrPath: string[]
+): Attrset {
+  const lhsAttrset = _assertIsMergeable(lhs, attrPath);
+  const rhsAttrset = _assertIsMergeable(rhs, attrPath);
+
+  let mergedMap = new Map(lhsAttrset.underlyingMap());
+  for (const nestedAttrName of rhsAttrset.keys()) {
+    let existingValue = mergedMap.get(nestedAttrName);
+    let newValue = rhsAttrset.lookup(nestedAttrName);
+
+    if (existingValue === undefined) {
+      mergedMap.set(nestedAttrName, newValue);
+      continue;
+    }
+
+    let mergedNestedValue = new Lazy(ctx, (ctx) =>
+      _recursiveDisjointMerge(ctx, existingValue, newValue, [
+        ...attrPath,
+        nestedAttrName,
+      ])
+    );
+    mergedMap.set(nestedAttrName, mergedNestedValue);
+  }
+  return new StrictAttrset(mergedMap);
+}
+
+function _assertIsMergeable(value: NixType, attrPath: string[]): Attrset {
+  const valueStrict = value.toStrict();
+  if (!(valueStrict instanceof Attrset)) {
+    throw new EvalException(
+      `Attribute '${attrPath.join(".")}' already defined.`
+    );
+  }
+  return valueStrict;
+}
+
 export class LazyAttrset extends Attrset {
   attrsetBuilder: AttrsetBuilder;
   map: Map<string, NixType>;
 
-  constructor(
-    evalCtx: EvalCtx,
-    isRecursive: boolean,
-    entries: [attrPath: InnerAttrPath, value: Body][]
-  ) {
+  constructor(evalCtx: EvalCtx, isRecursive: boolean, entries: AttrsetBody) {
     super();
     this.attrsetBuilder = new AttrsetBuilder(evalCtx, isRecursive, entries);
   }
@@ -971,17 +1007,11 @@ export class Lazy extends NixType {
 }
 
 // Attrset:
-export function attrset(
-  evalCtx: EvalCtx,
-  entries: [InnerAttrPath, Body][]
-): Attrset {
+export function attrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
   return new LazyAttrset(evalCtx, false, entries);
 }
 
-export function recAttrset(
-  evalCtx: EvalCtx,
-  entries: [InnerAttrPath, Body][]
-): Attrset {
+export function recAttrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
   return new LazyAttrset(evalCtx, true, entries);
 }
 
@@ -1084,58 +1114,42 @@ function normalizePath(path: string): string {
   return (isAbsolutePath(path) ? "/" : "") + normalizedSegments.join("/");
 }
 
-function entryToValue(ctx: EvalCtx, attrPath: NixType[], value: Body): NixType {
+/**
+ * If given an attrset entry like `a = value`, then this function returns just the given value.
+ * If the attrset has multiple segments (e.g. `a.b.c = value`), then this function returns
+ * a nested attrset (e.g. `{ b = { c = value; }; }`).
+ */
+function _attrPathToValue(
+  ctx: EvalCtx,
+  attrPath: NixType[],
+  value: NixType
+): undefined | NixType {
   if (attrPath.length === 0) {
-    return new Lazy(ctx, value);
+    throw new EvalException("Unexpected attr path of zero length.");
   }
 
   let attrName = attrPath[0].toStrict();
 
   // It turns out `null` attrnames are ignored by nix.
   if (attrName === NULL) {
-    return EMPTY_ATTRSET;
+    return undefined;
   }
 
-  let map = new Map();
-  map.set(
-    attrName.asString(),
-    new Lazy(ctx, (ctx) => entryToValue(ctx, attrPath.slice(1), value))
-  );
-  return new StrictAttrset(map);
-}
-
-function buildAttrset(
-  ctx: EvalCtx,
-  attrName: string,
-  lhsAttrset: NixType,
-  rhsAttrset: NixType
-): Attrset {
-  lhsAttrset = lhsAttrset.toStrict();
-  if (!(lhsAttrset instanceof Attrset)) {
-    throw new EvalException(`Attribute '${attrName}' already defined.`);
-  }
-  rhsAttrset = rhsAttrset.toStrict();
-  if (!(rhsAttrset instanceof Attrset)) {
-    throw new EvalException(`Attribute '${attrName}' already defined.`);
+  if (attrPath.length === 1) {
+    // The attr path has only one segment (e.g. `a = 1;`).
+    return value;
   }
 
-  let mergedMap = new Map(lhsAttrset.underlyingMap());
-  for (const nestedAttrName of rhsAttrset.keys()) {
-    let existingValue = mergedMap.get(nestedAttrName);
-    let mergedNestedValue = rhsAttrset.lookup(nestedAttrName);
-    if (existingValue !== undefined) {
-      mergedNestedValue = new Lazy(ctx, (ctx) =>
-        buildAttrset(
-          ctx,
-          `${attrName}.${nestedAttrName}`,
-          existingValue,
-          mergedNestedValue
-        )
-      );
+  return new Lazy(ctx, (ctx) => {
+    let nestedValue = _attrPathToValue(ctx, attrPath.slice(1), value);
+    if (nestedValue === undefined) {
+      return EMPTY_ATTRSET;
     }
-    mergedMap.set(nestedAttrName, mergedNestedValue);
-  }
-  return new StrictAttrset(mergedMap);
+
+    let map = new Map();
+    map.set(attrPath[1].asString(), nestedValue);
+    return new StrictAttrset(map);
+  });
 }
 
 function _nixBoolFromJs(value: boolean): NixBool {
