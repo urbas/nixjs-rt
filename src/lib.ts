@@ -861,6 +861,10 @@ export class Lazy extends NixType {
     return this.toStrict().add(rhs);
   }
 
+  override and(rhs: any): NixBool {
+    return this.toStrict().and(rhs);
+  }
+
   override asBoolean(): boolean {
     return this.toStrict().asBoolean();
   }
@@ -881,12 +885,32 @@ export class Lazy extends NixType {
     return this.toStrict().eq(rhs);
   }
 
+  override has(attrPath: NixType[]): NixBool {
+    return this.toStrict().has(attrPath);
+  }
+
+  override implication(rhs: NixType): NixBool {
+    return this.toStrict().implication(rhs);
+  }
+
+  override invert(): NixBool {
+    return this.toStrict().invert();
+  }
+
   override less(rhs: NixType): NixBool {
     return this.toStrict().less(rhs);
   }
 
-  override update(rhs: NixType): Attrset {
-    return this.toStrict().update(rhs);
+  override lessEq(rhs: NixType): NixBool {
+    return this.toStrict().lessEq(rhs);
+  }
+
+  override more(rhs: NixType): NixBool {
+    return this.toStrict().more(rhs);
+  }
+
+  override moreEq(rhs: any): NixBool {
+    return this.toStrict().moreEq(rhs);
   }
 
   override mul(rhs: NixType): NixInt | NixFloat {
@@ -899,6 +923,10 @@ export class Lazy extends NixType {
 
   override neq(rhs: NixType): NixBool {
     return this.toStrict().neq(rhs);
+  }
+
+  override or(rhs: NixType): NixBool {
+    return this.toStrict().or(rhs);
   }
 
   override select(
@@ -932,6 +960,10 @@ export class Lazy extends NixType {
 
   typeOf(): string {
     return this.toStrict().typeOf();
+  }
+
+  override update(rhs: NixType): Attrset {
+    return this.toStrict().update(rhs);
   }
 }
 
