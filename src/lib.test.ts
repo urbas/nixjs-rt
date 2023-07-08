@@ -1,6 +1,5 @@
 import { beforeEach, expect, test } from "@jest/globals";
 import n, {
-  Body,
   attrset,
   EvalCtx,
   NixFloat,
@@ -8,6 +7,7 @@ import n, {
   NixList,
   NixString,
   Path,
+  InnerAttrPath,
 } from "./lib";
 
 let evalCtx: EvalCtx;
@@ -183,15 +183,15 @@ test("attrset construction", () => {
 test("attrsets ignore null attrs", () => {
   expect(
     attrset(evalCtx, [
-      [[(_) => n.NULL, (_) => new NixString("a")], (_) => new NixFloat(1)],
+      [(_) => [n.NULL, new NixString("a")], (_) => new NixFloat(1)],
     ]).toJs()
   ).toStrictEqual(new Map());
   expect(
-    attrset(evalCtx, [[[(_) => n.NULL], (_) => new NixFloat(1)]]).toJs()
+    attrset(evalCtx, [[(_) => [n.NULL], (_) => new NixFloat(1)]]).toJs()
   ).toStrictEqual(new Map());
   expect(
     attrset(evalCtx, [
-      [[(_) => new NixString("a"), (_) => n.NULL], (_) => new NixFloat(1)],
+      [(_) => [new NixString("a"), n.NULL], (_) => new NixFloat(1)],
     ]).toJs()
   ).toStrictEqual(new Map([["a", new Map()]]));
 });
@@ -214,7 +214,7 @@ test("attrset construction with repeated attrs throws", () => {
 test("attrset with non-string attrs throw", () => {
   expect(() =>
     attrset(evalCtx, [
-      [[(_) => new NixFloat(1)], (_) => new NixFloat(1)],
+      [(_) => [new NixFloat(1)], (_) => new NixFloat(1)],
     ]).toJs()
   ).toThrow(n.EvalException);
 });
@@ -333,8 +333,8 @@ test("recursive attrsets allow referencing attributes from other attribute names
   expect(
     n
       .recAttrset(evalCtx, [
-        [[(ctx) => ctx.lookup("a")], (_) => new NixFloat(1)],
-        [[(_) => new NixString("a")], (_) => new NixString("b")],
+        [(ctx) => [ctx.lookup("a")], (_) => new NixFloat(1)],
+        [(_) => [new NixString("a")], (_) => new NixString("b")],
       ])
       .toJs()
   ).toStrictEqual(
@@ -347,9 +347,9 @@ test("recursive attrsets allow referencing attributes from other attribute names
   expect(
     n
       .recAttrset(evalCtx, [
-        [[(ctx) => ctx.lookup("a")], (_) => new NixFloat(1)],
-        [[(ctx) => ctx.lookup("b")], (_) => new NixString("c")],
-        [[(_) => new NixString("b")], (_) => new NixString("a")],
+        [(ctx) => [ctx.lookup("a")], (_) => new NixFloat(1)],
+        [(ctx) => [ctx.lookup("b")], (_) => new NixString("c")],
+        [(_) => [new NixString("b")], (_) => new NixString("a")],
       ])
       .toJs()
   ).toStrictEqual(
@@ -636,7 +636,7 @@ test("pattern lambda with arguments binding", () => {
 // Lazy:
 test("'Lazy.toStrict' evaluates the body only once", () => {
   let sentinel = new NixFloat(0);
-  let lazyValue = new n.Lazy(evalCtx, (evalCtx) => {
+  let lazyValue = new n.Lazy(evalCtx, (_) => {
     sentinel = sentinel.add(new NixFloat(1)) as NixFloat;
     return sentinel;
   });
@@ -753,9 +753,9 @@ function testEvalCtx() {
   return new EvalCtx("/test_base");
 }
 
-function keyVal<T>(attrpathStr: string, value: T): [Body[], T] {
+function keyVal<T>(attrpathStr: string, value: T): [InnerAttrPath, T] {
   return [
-    attrpathStr.split(".").map((val) => (_) => new NixString(val)),
+    (_ctx) => attrpathStr.split(".").map((val) => new NixString(val)),
     value,
   ];
 }

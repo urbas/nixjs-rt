@@ -10,6 +10,8 @@ export class EvalException extends Error {
 
 export type Body = (evalCtx: EvalCtx) => NixType;
 
+export type InnerAttrPath = (evalCtx: EvalCtx) => NixType[];
+
 interface Scope {
   lookup(name: string): NixType | undefined;
 }
@@ -410,26 +412,22 @@ export class StrictAttrset extends Attrset {
 
 export const EMPTY_ATTRSET = new StrictAttrset(new Map());
 
-class AttrsetBuilder {
-  entries: [attrPath: Body[], value: Body][];
+class AttrsetBuilder implements Scope {
+  entries: [attrPath: InnerAttrPath, value: Body][];
   evalCtx: EvalCtx;
   // The final map into which this builder will insert fully-evaluated
   // attrnames and their corresponding values.
   map: Map<string, NixType>;
-  // The index of entry to be processed when building the attrset.
+  // The index of the next entry to be processed when building the attrset.
   pendingEntryIdx: number = 0;
 
   constructor(
     evalCtx: EvalCtx,
     isRecursive: boolean,
-    entries: [attrPath: Body[], value: Body][]
+    entries: [attrPath: InnerAttrPath, value: Body][]
   ) {
     this.entries = entries;
     this.evalCtx = isRecursive ? evalCtx.withShadowingScope(this) : evalCtx;
-  }
-
-  lookup(attrName: string): NixType {
-    return this.build().get(attrName);
   }
 
   build(): Map<string, NixType> {
@@ -440,13 +438,14 @@ class AttrsetBuilder {
     let map = this.underlyingMap();
     while (this.pendingEntryIdx < this.entries.length) {
       const currentEntryIdx = this.pendingEntryIdx++;
-      const [attrPath, value] = this.entries[currentEntryIdx];
+      const [rawAttrPath, value] = this.entries[currentEntryIdx];
+      const attrPath = rawAttrPath(this.evalCtx);
       if (attrPath.length === 0) {
         throw new EvalException(
           "Cannot add an undefined attribute name to the attrset."
         );
       }
-      const attrName = attrPath[0](this.evalCtx).toStrict();
+      const attrName = attrPath[0].toStrict();
 
       // It turns out `null` attrnames are ignored by nix.
       if (attrName === NULL) {
@@ -472,6 +471,10 @@ class AttrsetBuilder {
     return map;
   }
 
+  lookup(attrName: string): NixType {
+    return this.build().get(attrName);
+  }
+
   underlyingMap(): Map<string, NixType> {
     if (this.map === undefined) {
       this.map = new Map();
@@ -487,7 +490,7 @@ export class LazyAttrset extends Attrset {
   constructor(
     evalCtx: EvalCtx,
     isRecursive: boolean,
-    entries: [attrPath: Body[], value: Body][]
+    entries: [attrPath: InnerAttrPath, value: Body][]
   ) {
     super();
     this.attrsetBuilder = new AttrsetBuilder(evalCtx, isRecursive, entries);
@@ -968,13 +971,16 @@ export class Lazy extends NixType {
 }
 
 // Attrset:
-export function attrset(evalCtx: EvalCtx, entries: [Body[], Body][]): Attrset {
+export function attrset(
+  evalCtx: EvalCtx,
+  entries: [InnerAttrPath, Body][]
+): Attrset {
   return new LazyAttrset(evalCtx, false, entries);
 }
 
 export function recAttrset(
   evalCtx: EvalCtx,
-  entries: [Body[], Body][]
+  entries: [InnerAttrPath, Body][]
 ): Attrset {
   return new LazyAttrset(evalCtx, true, entries);
 }
@@ -1078,12 +1084,12 @@ function normalizePath(path: string): string {
   return (isAbsolutePath(path) ? "/" : "") + normalizedSegments.join("/");
 }
 
-function entryToValue(ctx: EvalCtx, attrPath: Body[], value: Body): NixType {
+function entryToValue(ctx: EvalCtx, attrPath: NixType[], value: Body): NixType {
   if (attrPath.length === 0) {
     return new Lazy(ctx, value);
   }
 
-  let attrName = attrPath[0](ctx).toStrict();
+  let attrName = attrPath[0].toStrict();
 
   // It turns out `null` attrnames are ignored by nix.
   if (attrName === NULL) {
