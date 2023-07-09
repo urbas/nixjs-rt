@@ -30,8 +30,14 @@ class CompoundScope implements Scope {
 }
 
 class GlobalScope implements Scope {
+  readonly scope: Map<string, NixType>;
+
+  constructor(scope: Map<string, NixType>) {
+    this.scope = scope;
+  }
+
   lookup(name: string): NixType | undefined {
-    return undefined;
+    return this.scope.get(name);
   }
 }
 
@@ -50,9 +56,9 @@ export class EvalCtx implements Scope {
   ) {
     this.scriptDir = scriptDir;
     this.shadowScope =
-      shadowScope === undefined ? new GlobalScope() : shadowScope;
+      shadowScope === undefined ? _buildGlobalScope() : shadowScope;
     this.nonShadowScope =
-      nonShadowScope === undefined ? new GlobalScope() : nonShadowScope;
+      nonShadowScope === undefined ? _buildGlobalScope() : nonShadowScope;
   }
 
   withShadowingScope(lookupTable: Scope): EvalCtx {
@@ -92,8 +98,14 @@ export abstract class NixType {
     );
   }
 
-  and(rhs: any): NixBool {
+  and(rhs: NixType): NixBool {
     return _nixBoolFromJs(this.asBoolean() && rhs.asBoolean());
+  }
+
+  apply(param: NixType): NixType {
+    throw new EvalException(
+      `Attempt to call something which is not a function but is '${this.typeOf()}'.`
+    );
   }
 
   asBoolean(): boolean {
@@ -156,7 +168,7 @@ export abstract class NixType {
     return rhs.less(this);
   }
 
-  moreEq(rhs: any): NixBool {
+  moreEq(rhs: NixType): NixBool {
     return this.less(rhs).invert();
   }
 
@@ -900,8 +912,12 @@ export class Lazy extends NixType {
     return this.toStrict().add(rhs);
   }
 
-  override and(rhs: any): NixBool {
+  override and(rhs: NixType): NixBool {
     return this.toStrict().and(rhs);
+  }
+
+  override apply(param: NixType): NixType {
+    return this.toStrict().apply(param);
   }
 
   override asBoolean(): boolean {
@@ -948,7 +964,7 @@ export class Lazy extends NixType {
     return this.toStrict().more(rhs);
   }
 
-  override moreEq(rhs: any): NixBool {
+  override moreEq(rhs: NixType): NixBool {
     return this.toStrict().moreEq(rhs);
   }
 
@@ -1006,6 +1022,27 @@ export class Lazy extends NixType {
   }
 }
 
+export class Lambda extends NixType {
+  body: (param: NixType) => NixType;
+
+  constructor(body: (param: NixType) => NixType) {
+    super();
+    this.body = body;
+  }
+
+  override apply(param: NixType): NixType {
+    return this.body(param);
+  }
+
+  toJs(): any {
+    return this.body;
+  }
+
+  typeOf(): string {
+    return "lambda";
+  }
+}
+
 // Attrset:
 export function attrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
   return new LazyAttrset(evalCtx, false, entries);
@@ -1015,26 +1052,48 @@ export function recAttrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
   return new LazyAttrset(evalCtx, true, entries);
 }
 
+// Builtins:
+function _createBuiltinsAttrset() {
+  const builtins = new Map();
+
+  builtins.set("head", new Lambda(head));
+
+  return new StrictAttrset(builtins);
+}
+
+function head(param: NixType): NixType {
+  const paramStrict = param.toStrict();
+  if (!(paramStrict instanceof NixList)) {
+    throw new EvalException(
+      `Cannot apply the 'head' function on '${paramStrict.typeOf()}'.`
+    );
+  }
+  if (paramStrict.values.length === 0) {
+    throw new EvalException("Cannot fetch the first element in an empty list.");
+  }
+  return paramStrict.values[0];
+}
+
 // Lambda:
 export function paramLambda(
-  evalCtx: EvalCtx,
+  ctx: EvalCtx,
   paramName: string,
   body: Body
-): any {
-  return (param) => {
+): Lambda {
+  return new Lambda((param) => {
     let paramScope = new Map();
     paramScope.set(paramName, param);
-    return letIn(evalCtx, new StrictAttrset(paramScope), body);
-  };
+    return letIn(ctx, new StrictAttrset(paramScope), body);
+  });
 }
 
 export function patternLambda(
-  evalCtx: EvalCtx,
+  ctx: EvalCtx,
   argsBind: string | undefined,
   patterns: [[string, any]],
   body: Body
 ): any {
-  return (param: Attrset) => {
+  return new Lambda((param: Attrset) => {
     let paramScope = new Map();
     for (const [paramName, defaultValue] of patterns) {
       // We are using `get` here instead of `_strictSelect` because we're adding the
@@ -1053,12 +1112,12 @@ export function patternLambda(
     if (argsBind !== undefined) {
       paramScope.set(argsBind, param);
     }
-    return letIn(evalCtx, new StrictAttrset(paramScope), body);
-  };
+    return letIn(ctx, new StrictAttrset(paramScope), body);
+  });
 }
 
 // Let in:
-export function letIn(evalCtx: EvalCtx, attrs: Attrset, body: Body): NixType {
+export function letIn(evalCtx: EvalCtx, attrs: Scope, body: Body): NixType {
   return body(evalCtx.withShadowingScope(attrs));
 }
 
@@ -1156,6 +1215,12 @@ function _nixBoolFromJs(value: boolean): NixBool {
   return value ? TRUE : FALSE;
 }
 
+function _buildGlobalScope() {
+  const scope = new Map();
+  scope.set("builtins", _createBuiltinsAttrset());
+  return new GlobalScope(scope);
+}
+
 // With:
 export function withExpr(
   evalCtx: EvalCtx,
@@ -1176,6 +1241,7 @@ export default {
   Attrset,
   EvalCtx,
   EvalException,
+  Lambda,
   Lazy,
   LazyAttrset,
   NixBool,
