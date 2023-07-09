@@ -356,7 +356,11 @@ export abstract class Attrset extends NixType implements Scope {
 
     if (value === undefined) {
       if (defaultValue === undefined) {
-        throw new EvalException(`Attribute '${attrPath}' is missing.`);
+        throw new EvalException(
+          `Attribute '${attrPath
+            .map((attrName) => attrName.asString())
+            .join(".")}' is missing.`
+        );
       }
       return defaultValue;
     }
@@ -1056,22 +1060,29 @@ export function recAttrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
 function _createBuiltinsAttrset() {
   const builtins = new Map();
 
+  builtins.set("abort", new Lambda(abort));
   builtins.set("head", new Lambda(head));
 
   return new StrictAttrset(builtins);
 }
 
-function head(param: NixType): NixType {
-  const paramStrict = param.toStrict();
-  if (!(paramStrict instanceof NixList)) {
+function abort(message: NixType): NixType {
+  throw new EvalException(
+    `Evaluation aborted with the following error message: '${message.asString()}'`
+  );
+}
+
+function head(list: NixType): NixType {
+  const listStrict = list.toStrict();
+  if (!(listStrict instanceof NixList)) {
     throw new EvalException(
-      `Cannot apply the 'head' function on '${paramStrict.typeOf()}'.`
+      `Cannot apply the 'head' function on '${listStrict.typeOf()}'.`
     );
   }
-  if (paramStrict.values.length === 0) {
+  if (listStrict.values.length === 0) {
     throw new EvalException("Cannot fetch the first element in an empty list.");
   }
-  return paramStrict.values[0];
+  return listStrict.values[0];
 }
 
 // Lambda:
@@ -1217,7 +1228,12 @@ function _nixBoolFromJs(value: boolean): NixBool {
 
 function _buildGlobalScope() {
   const scope = new Map();
-  scope.set("builtins", _createBuiltinsAttrset());
+  const builtins = _createBuiltinsAttrset();
+  scope.set("builtins", builtins);
+
+  // Nix makes some builtins available directly in the global scope:
+  scope.set("abort", builtins.lookup("abort"));
+
   return new GlobalScope(scope);
 }
 

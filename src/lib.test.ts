@@ -453,33 +453,42 @@ test("'||' operator on non-booleans raises exceptions", () => {
 });
 
 // Builtins:
+test("'builtins.abort' throws with the given message", () => {
+  expect(() => getBuiltin("abort").apply(new NixString("foo"))).toThrow(
+    new EvalException(
+      "Evaluation aborted with the following error message: 'foo'"
+    )
+  );
+  // `abort` is special, since it's available directly on the global scope
+  expect(() => evalCtx.lookup("abort").apply(new NixString("foo"))).toThrow(
+    new EvalException(
+      "Evaluation aborted with the following error message: 'foo'"
+    )
+  );
+});
+
+test("'builtins.abort' on a non-string throws during coercion", () => {
+  expect(() => getBuiltin("abort").apply(new NixFloat(1))).toThrow(
+    new EvalException("Value is 'float' but a string was expected.")
+  );
+});
+
 test("'builtins.head' on lists", () => {
   expect(
-    evalCtx
-      .lookup("builtins")
-      .select([new NixString("head")], undefined)
-      .apply(new NixList([new NixFloat(1), new NixFloat(2)]))
+    getBuiltin("head").apply(new NixList([new NixFloat(1), new NixFloat(2)]))
   ).toStrictEqual(new NixFloat(1));
 });
 
 test("'builtins.head' throws when list is empty", () => {
-  expect(() =>
-    evalCtx
-      .lookup("builtins")
-      .select([new NixString("head")], undefined)
-      .apply(new NixList([]))
-  ).toThrow(
+  expect(() => getBuiltin("head").apply(new NixList([]))).toThrow(
     new EvalException("Cannot fetch the first element in an empty list.")
   );
 });
 
 test("'builtins.head' on non-lists throws", () => {
-  expect(() =>
-    evalCtx
-      .lookup("builtins")
-      .select([new NixString("head")], undefined)
-      .apply(new NixFloat(1))
-  ).toThrow(new EvalException("Cannot apply the 'head' function on 'float'."));
+  expect(() => getBuiltin("head").apply(new NixFloat(1))).toThrow(
+    new EvalException("Cannot apply the 'head' function on 'float'.")
+  );
 });
 
 // Comparison:
@@ -838,4 +847,10 @@ function keyVals(
 
 function toAttrpath(attrPathStr: string): NixType[] {
   return attrPathStr.split(".").map((val) => new NixString(val) as NixType);
+}
+
+function getBuiltin(builtinName: string): NixType {
+  return evalCtx
+    .lookup("builtins")
+    .select([new NixString(builtinName)], undefined);
 }
