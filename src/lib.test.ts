@@ -2,8 +2,10 @@ import { beforeEach, expect, test } from "@jest/globals";
 import n, {
   attrset,
   AttrsetBody,
+  EMPTY_ATTRSET,
   EvalCtx,
   EvalException,
+  Lambda,
   Lazy,
   NixFloat,
   NixInt,
@@ -17,6 +19,21 @@ let evalCtx: EvalCtx;
 
 beforeEach(() => {
   evalCtx = testEvalCtx();
+});
+
+// Apply:
+test("calling a lambda should return its value", () => {
+  expect(new Lambda((_) => new NixInt(1n)).apply(EMPTY_ATTRSET)).toStrictEqual(
+    new NixInt(1n)
+  );
+});
+
+test("calling something that isn't a lambda should throw", () => {
+  expect(() => new NixInt(1n).apply(EMPTY_ATTRSET)).toThrow(
+    new EvalException(
+      "Attempt to call something which is not a function but is 'int'."
+    )
+  );
 });
 
 // Arithmetic:
@@ -435,6 +452,36 @@ test("'||' operator on non-booleans raises exceptions", () => {
   expect(() => new NixFloat(1).or(n.TRUE)).toThrow(n.EvalException);
 });
 
+// Builtins:
+test("'builtins.head' on lists", () => {
+  expect(
+    evalCtx
+      .lookup("builtins")
+      .select([new NixString("head")], undefined)
+      .apply(new NixList([new NixFloat(1), new NixFloat(2)]))
+  ).toStrictEqual(new NixFloat(1));
+});
+
+test("'builtins.head' throws when list is empty", () => {
+  expect(() =>
+    evalCtx
+      .lookup("builtins")
+      .select([new NixString("head")], undefined)
+      .apply(new NixList([]))
+  ).toThrow(
+    new EvalException("Cannot fetch the first element in an empty list.")
+  );
+});
+
+test("'builtins.head' on non-lists throws", () => {
+  expect(() =>
+    evalCtx
+      .lookup("builtins")
+      .select([new NixString("head")], undefined)
+      .apply(new NixFloat(1))
+  ).toThrow(new EvalException("Cannot apply the 'head' function on 'float'."));
+});
+
 // Comparison:
 test("'==' operator on numbers", () => {
   expect(new NixFloat(1).eq(new NixFloat(2))).toBe(n.FALSE);
@@ -612,7 +659,9 @@ test("'>' operator", () => {
 // Lambda:
 test("parameter lambda", () => {
   expect(
-    n.paramLambda(evalCtx, "foo", (evalCtx) => evalCtx.lookup("foo"))(n.TRUE)
+    n
+      .paramLambda(evalCtx, "foo", (evalCtx) => evalCtx.lookup("foo"))
+      .apply(n.TRUE)
   ).toBe(n.TRUE);
 });
 
@@ -622,7 +671,8 @@ test("pattern lambda", () => {
     n
       .patternLambda(evalCtx, undefined, [["a", undefined]], (evalCtx) =>
         evalCtx.lookup("a")
-      )(arg)
+      )
+      .apply(arg)
       .toJs()
   ).toBe(1);
 });
@@ -630,9 +680,11 @@ test("pattern lambda", () => {
 test("pattern lambda with default values", () => {
   const arg = n.attrset(evalCtx, keyVals());
   expect(
-    n.patternLambda(evalCtx, undefined, [["a", 1]], (evalCtx) =>
-      evalCtx.lookup("a")
-    )(arg)
+    n
+      .patternLambda(evalCtx, undefined, [["a", 1]], (evalCtx) =>
+        evalCtx.lookup("a")
+      )
+      .apply(arg)
   ).toBe(1);
 });
 
@@ -641,9 +693,11 @@ test("pattern lambda with missing parameter", () => {
     n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]))
   );
   expect(() =>
-    n.patternLambda(innerCtx, undefined, [["a", undefined]], (evalCtx) =>
-      evalCtx.lookup("a")
-    )(n.attrset(evalCtx, keyVals()))
+    n
+      .patternLambda(innerCtx, undefined, [["a", undefined]], (evalCtx) =>
+        evalCtx.lookup("a")
+      )
+      .apply(n.attrset(evalCtx, keyVals()))
   ).toThrow(n.EvalException);
 });
 
@@ -653,7 +707,8 @@ test("pattern lambda with arguments binding", () => {
     n
       .patternLambda(evalCtx, "args", [["a", undefined]], (evalCtx) =>
         evalCtx.lookup("args").select([new NixString("a")], undefined)
-      )(arg)
+      )
+      .apply(arg)
       .toJs()
   ).toBe(1);
 });
@@ -740,6 +795,7 @@ test("typeOf", () => {
   expect(new NixList([]).typeOf()).toBe("list");
   expect(attrset(evalCtx, keyVals()).typeOf()).toBe("set");
   expect(new Path("/").typeOf()).toBe("path");
+  expect(new Lambda((_) => n.TRUE).typeOf()).toBe("lambda");
   // TODO: cover other Nix types
 });
 
