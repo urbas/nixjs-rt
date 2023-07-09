@@ -7,5 +7,5 @@ let
 in buildNpmPackage {
   name = "nixrt";
   src = self;
-  npmDepsHash = "sha256-oQS9RCkinBAmwD7v6uMLLO81VRd9ADiTKubIbyvdFsE=";
+  npmDepsHash = "sha256-yyC5WrVRfVPyR2DRFxiXKlpJ+WbwZbWoUxmd4uA8O/Y=";
 }
