@@ -273,7 +273,7 @@ export abstract class Attrset extends NixType implements Scope {
       return FALSE;
     }
     for (const key of this.keys()) {
-      if (!this.lookup(key).eq(rhs.lookup(key)).toJs()) {
+      if (!this.lookup(key).eq(rhs.lookup(key)).value) {
         return FALSE;
       }
     }
@@ -749,6 +749,7 @@ export class NixList extends NixType {
   }
 
   override concat(other: NixType): NixList {
+    other = other.toStrict();
     if (other instanceof NixList) {
       return new NixList(this.values.concat(other.values));
     }
@@ -764,7 +765,7 @@ export class NixList extends NixType {
       return FALSE;
     }
     for (let idx = 0; idx < this.values.length; idx++) {
-      if (!this.values[idx].eq(rhs.values[idx]).toJs()) {
+      if (!this.values[idx].eq(rhs.values[idx]).value) {
         return FALSE;
       }
     }
@@ -779,10 +780,10 @@ export class NixList extends NixType {
 
     const minLen = Math.min(this.values.length, rhs.values.length);
     for (let idx = 0; idx < minLen; idx++) {
-      const currentLhs = this.values[idx];
-      const currentRhs = rhs.values[idx];
+      const currentLhs = this.values[idx].toStrict();
+      const currentRhs = rhs.values[idx].toStrict();
       // This special-casing for booleans and nulls replicates nix's behaviour. Some examples:
-      // - nix evaluates this: `[true] < [true] == false` rather than trowing an exception,
+      // - nix evaluates this: `[true] < [true] == false` rather than throwing an exception,
       // - the same for `[false] < [false] == false`, and
       // - the same for `[null] < [null] == false`.
       if (
@@ -794,7 +795,7 @@ export class NixList extends NixType {
       if (currentLhs === NULL && currentRhs === NULL) {
         continue;
       }
-      if (currentLhs.less(currentRhs).toJs()) {
+      if (currentLhs.less(currentRhs).value) {
         return TRUE;
       }
     }
@@ -802,7 +803,7 @@ export class NixList extends NixType {
   }
 
   toJs(): NixType[] {
-    return this.values;
+    return this.values.map((element) => element.toJs());
   }
 
   typeOf(): string {
