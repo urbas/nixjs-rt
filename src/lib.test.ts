@@ -591,7 +591,7 @@ test("'<' operator on null values throws", () => {
   expect(() => n.NULL.less(n.NULL)).toThrow(n.EvalException);
 });
 
-test("'<' operator lists", () => {
+test("'<' operator on lists", () => {
   expect(new NixList([]).less(new NixList([]))).toBe(n.FALSE);
   expect(new NixList([]).less(new NixList([new NixFloat(1)]))).toBe(n.TRUE);
   expect(new NixList([new NixFloat(1)]).less(new NixList([]))).toBe(n.FALSE);
@@ -626,6 +626,26 @@ test("'<' operator lists", () => {
     )
   ).toBe(n.TRUE);
   expect(new NixList([n.NULL]).less(new NixList([n.NULL]))).toBe(n.FALSE);
+});
+
+test("'<' operator on lists with lazy values", () => {
+  expect(
+    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))]).less(
+      new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))])
+    )
+  ).toBe(n.FALSE);
+
+  expect(
+    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))]).less(
+      new NixList([new Lazy(evalCtx, (_) => new NixFloat(2))])
+    )
+  ).toBe(n.TRUE);
+
+  expect(
+    new NixList([new Lazy(evalCtx, (_) => n.TRUE)]).less(
+      new NixList([new Lazy(evalCtx, (_) => n.TRUE)])
+    )
+  ).toBe(n.FALSE);
 });
 
 test("'<' operator list invalid", () => {
@@ -759,6 +779,19 @@ test("'++' operator", () => {
   // Here's we're verifying that neither of the operands is mutated.
   expect(list_1).toStrictEqual(new NixList([new NixFloat(1)]));
   expect(list_2).toStrictEqual(new NixList([new NixFloat(2)]));
+});
+
+test("'++' operator on lazy lists with lazy values", () => {
+  expect(
+    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))])
+      .concat(
+        new Lazy(
+          evalCtx,
+          (_) => new NixList([new Lazy(evalCtx, (_) => new NixFloat(2))])
+        )
+      )
+      .toJs()
+  ).toStrictEqual([1, 2]);
 });
 
 test("'++' operator on non-lists raises exceptions", () => {
