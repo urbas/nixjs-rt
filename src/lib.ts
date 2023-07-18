@@ -1062,6 +1062,7 @@ function _createBuiltinsAttrset() {
   const builtins = new Map();
 
   builtins.set("abort", new Lambda(abort));
+  builtins.set("add", new Lambda(add));
   builtins.set("head", new Lambda(head));
 
   return new StrictAttrset(builtins);
@@ -1071,6 +1072,24 @@ function abort(message: NixType): NixType {
   throw new EvalException(
     `Evaluation aborted with the following error message: '${message.asString()}'`
   );
+}
+
+function add(lhs: NixType): Lambda {
+  return new Lambda((rhs) => {
+    let lhsStrict = lhs.toStrict();
+    if (!(lhsStrict instanceof NixInt || lhsStrict instanceof NixFloat)) {
+      throw new EvalException(
+        `value is of type '${lhs.typeOf()}' while a number was expected.`
+      );
+    }
+    let rhsStrict = rhs.toStrict();
+    if (!(rhsStrict instanceof NixInt || rhsStrict instanceof NixFloat)) {
+      throw new EvalException(
+        `value is of type '${rhs.typeOf()}' while a number was expected.`
+      );
+    }
+    return lhsStrict.add(rhsStrict);
+  });
 }
 
 function head(list: NixType): NixType {
