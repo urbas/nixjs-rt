@@ -25,7 +25,7 @@
 
       devShells = forAllSystems ({pkgs}: with pkgs; {
         default = stdenv.mkDerivation {
-          name = "nixrt";
+          name = "nixjs-rt";
           buildInputs = devPkgs pkgs;
         };
       });
