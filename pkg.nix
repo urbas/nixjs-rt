@@ -5,7 +5,7 @@ let
   inherit (pkgs) buildNpmPackage;
 
 in buildNpmPackage {
-  name = "nixrt";
+  name = "nixjs-rt";
   src = self;
-  npmDepsHash = "sha256-yyC5WrVRfVPyR2DRFxiXKlpJ+WbwZbWoUxmd4uA8O/Y=";
+  npmDepsHash = "sha256-pb8WTesMyb1VCU/1nEgcFAIC1iZ4afZHV4NEEJS4x8A=";
 }

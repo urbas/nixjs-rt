@@ -62,3 +62,9 @@ Update the version of JavaScript dependencies:
 ```bash
 npm update
 ```
+
+Finally, update the dependencies hash:
+
+```bash
+scripts/update-npm-deps-hash.sh
+```

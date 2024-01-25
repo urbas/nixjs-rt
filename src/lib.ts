@@ -52,11 +52,13 @@ export class EvalCtx implements Scope {
   constructor(
     scriptDir: string,
     shadowScope: Scope | undefined = undefined,
-    nonShadowScope: Scope | undefined = undefined
+    nonShadowScope: Scope | undefined = undefined,
   ) {
     this.scriptDir = scriptDir;
     this.shadowScope =
       shadowScope === undefined ? _buildGlobalScope() : shadowScope;
+    // TODO: don't create a global scope for non-shadowing scope as there will
+    // be a shadowing global scope that will be hit first.
     this.nonShadowScope =
       nonShadowScope === undefined ? _buildGlobalScope() : nonShadowScope;
   }
@@ -65,7 +67,7 @@ export class EvalCtx implements Scope {
     return new EvalCtx(
       this.scriptDir,
       new CompoundScope(this.shadowScope, lookupTable),
-      this.nonShadowScope
+      this.nonShadowScope,
     );
   }
 
@@ -73,7 +75,7 @@ export class EvalCtx implements Scope {
     return new EvalCtx(
       this.scriptDir,
       this.shadowScope,
-      new CompoundScope(this.nonShadowScope, lookupTable)
+      new CompoundScope(this.nonShadowScope, lookupTable),
     );
   }
 
@@ -91,10 +93,8 @@ export abstract class NixType {
    * This method implements the `+` operator. It adds the `rhs` value to this value.
    */
   add(rhs: NixType): NixType {
-    // TODO: can we get rid of the EvalCtx? It's needed when joining paths. Maybe we can store
-    // the required context needed by paths in themselves rather than passing it here?
     throw new EvalException(
-      `Cannot add '${this.typeOf()}' to '${rhs.typeOf()}'.`
+      `Cannot add '${this.typeOf()}' to '${rhs.typeOf()}'.`,
     );
   }
 
@@ -104,31 +104,31 @@ export abstract class NixType {
 
   apply(param: NixType): NixType {
     throw new EvalException(
-      `Attempt to call something which is not a function but is '${this.typeOf()}'.`
+      `Attempt to call something which is not a function but is '${this.typeOf()}'.`,
     );
   }
 
   asBoolean(): boolean {
     throw new EvalException(
-      `Value is '${this.typeOf()}' but a boolean was expected.`
+      `Value is '${this.typeOf()}' but a boolean was expected.`,
     );
   }
 
   asString(): string {
     throw new EvalException(
-      `Value is '${this.typeOf()}' but a string was expected.`
-    );
-  }
-
-  div(rhs: NixType): NixInt | NixFloat {
-    throw new EvalException(
-      `Cannot divide '${this.typeOf()}' and '${rhs.typeOf()}'.`
+      `Value is '${this.typeOf()}' but a string was expected.`,
     );
   }
 
   concat(other: NixType): NixList {
     throw new EvalException(
-      `Cannot concatenate '${this.typeOf()}' and '${other.typeOf()}'.`
+      `Cannot concatenate '${this.typeOf()}' and '${other.typeOf()}'.`,
+    );
+  }
+
+  div(rhs: NixType): NixInt | NixFloat {
+    throw new EvalException(
+      `Cannot divide '${this.typeOf()}' and '${rhs.typeOf()}'.`,
     );
   }
 
@@ -156,7 +156,7 @@ export abstract class NixType {
    */
   less(rhs: NixType): NixBool {
     throw new EvalException(
-      `Cannot compare '${this.typeOf()}' with '${rhs.typeOf()}'.`
+      `Cannot compare '${this.typeOf()}' with '${rhs.typeOf()}'.`,
     );
   }
 
@@ -174,7 +174,7 @@ export abstract class NixType {
 
   mul(rhs: NixType): NixInt | NixFloat {
     throw new EvalException(
-      `Cannot multiply '${this.typeOf()}' and '${rhs.typeOf()}'.`
+      `Cannot multiply '${this.typeOf()}' and '${rhs.typeOf()}'.`,
     );
   }
 
@@ -199,7 +199,7 @@ export abstract class NixType {
    */
   sub(rhs: NixType): NixInt | NixFloat {
     throw new EvalException(
-      `Cannot subtract '${this.typeOf()}' and '${rhs.typeOf()}'.`
+      `Cannot subtract '${this.typeOf()}' and '${rhs.typeOf()}'.`,
     );
   }
 
@@ -218,7 +218,7 @@ export abstract class NixType {
   }
 
   /**
-   * Returns a human-readable name of the type of this type.
+   * Returns a human-readable name of the type of this value.
    */
   abstract typeOf(): string;
 
@@ -229,7 +229,7 @@ export abstract class NixType {
    */
   update(rhs: NixType): Attrset {
     throw new EvalException(
-      `Cannot merge '${this.typeOf()}' with '${rhs.typeOf()}'. Can only merge attrset with attrset.`
+      `Cannot merge '${this.typeOf()}' with '${rhs.typeOf()}'. Can only merge attrset with attrset.`,
     );
   }
 }
@@ -291,7 +291,7 @@ export abstract class Attrset extends NixType implements Scope {
     attrName = attrName.toStrict();
     if (!(attrName instanceof NixString)) {
       throw new EvalException(
-        `Attribute name must be a string but '${attrName.typeOf()}' given.`
+        `Attribute name must be a string but '${attrName.typeOf()}' given.`,
       );
     }
     return this.lookup(attrName.value);
@@ -314,9 +314,6 @@ export abstract class Attrset extends NixType implements Scope {
       if (!(foundValue instanceof Attrset)) {
         return FALSE;
       }
-      // We're using `get` here instead of `_strictSelect` because we're not
-      // interested in the value of the attribute but only whether the attribute
-      // exists or not. So, no need to evaluate the attribute value.
       foundValue = foundValue.get(attrName);
     }
     return _nixBoolFromJs(foundValue !== undefined);
@@ -335,7 +332,7 @@ export abstract class Attrset extends NixType implements Scope {
 
   override select(
     attrPath: NixType[],
-    defaultValue: NixType | undefined
+    defaultValue: NixType | undefined,
   ): NixType {
     let curAttrset: Attrset = this;
     const nestingDepth = attrPath.length - 1;
@@ -359,7 +356,7 @@ export abstract class Attrset extends NixType implements Scope {
         throw new EvalException(
           `Attribute '${attrPath
             .map((attrName) => attrName.asString())
-            .join(".")}' is missing.`
+            .join(".")}' is missing.`,
         );
       }
       return defaultValue;
@@ -425,11 +422,10 @@ export class StrictAttrset extends Attrset {
 
 export const EMPTY_ATTRSET = new StrictAttrset(new Map());
 export type AttrsetBody = (
-  ctx: EvalCtx
+  ctx: EvalCtx,
 ) => [attrPath: NixType[], value: NixType][];
 
 class AttrsetBuilder implements Scope {
-  // What if this was
   attrsetBody: AttrsetBody;
   entries: [attrPath: NixType[], value: NixType][];
   evalCtx: EvalCtx;
@@ -442,7 +438,7 @@ class AttrsetBuilder implements Scope {
   constructor(
     evalCtx: EvalCtx,
     isRecursive: boolean,
-    attrsetBody: AttrsetBody
+    attrsetBody: AttrsetBody,
   ) {
     this.evalCtx = isRecursive ? evalCtx.withShadowingScope(this) : evalCtx;
     this.attrsetBody = attrsetBody;
@@ -459,7 +455,7 @@ class AttrsetBuilder implements Scope {
       const [attrPath, value] = this.entries[currentEntryIdx];
       if (attrPath.length === 0) {
         throw new EvalException(
-          "Cannot add an undefined attribute name to the attrset."
+          "Cannot add an undefined attribute name to the attrset.",
         );
       }
       const attrName = attrPath[0].toStrict();
@@ -476,7 +472,7 @@ class AttrsetBuilder implements Scope {
           ? new Lazy(this.evalCtx, (ctx) =>
               _recursiveDisjointMerge(ctx, existingValue, currentValue, [
                 attrNameStr,
-              ])
+              ]),
             )
           : currentValue;
 
@@ -503,7 +499,7 @@ function _recursiveDisjointMerge(
   ctx: EvalCtx,
   lhs: NixType,
   rhs: NixType,
-  attrPath: string[]
+  attrPath: string[],
 ): Attrset {
   const lhsAttrset = _assertIsMergeable(lhs, attrPath);
   const rhsAttrset = _assertIsMergeable(rhs, attrPath);
@@ -522,7 +518,7 @@ function _recursiveDisjointMerge(
       _recursiveDisjointMerge(ctx, existingValue, newValue, [
         ...attrPath,
         nestedAttrName,
-      ])
+      ]),
     );
     mergedMap.set(nestedAttrName, mergedNestedValue);
   }
@@ -533,7 +529,7 @@ function _assertIsMergeable(value: NixType, attrPath: string[]): Attrset {
   const valueStrict = value.toStrict();
   if (!(valueStrict instanceof Attrset)) {
     throw new EvalException(
-      `Attribute '${attrPath.join(".")}' already defined.`
+      `Attribute '${attrPath.join(".")}' already defined.`,
     );
   }
   return valueStrict;
@@ -991,7 +987,7 @@ export class Lazy extends NixType {
 
   override select(
     attrPath: NixType[],
-    defaultValue: NixType | undefined
+    defaultValue: NixType | undefined,
   ): NixType {
     return this.toStrict().select(attrPath, defaultValue);
   }
@@ -1070,7 +1066,7 @@ function _createBuiltinsAttrset() {
 
 function abort(message: NixType): NixType {
   throw new EvalException(
-    `Evaluation aborted with the following error message: '${message.asString()}'`
+    `Evaluation aborted with the following error message: '${message.asString()}'`,
   );
 }
 
@@ -1079,13 +1075,13 @@ function add(lhs: NixType): Lambda {
     let lhsStrict = lhs.toStrict();
     if (!(lhsStrict instanceof NixInt || lhsStrict instanceof NixFloat)) {
       throw new EvalException(
-        `value is of type '${lhs.typeOf()}' while a number was expected.`
+        `value is of type '${lhs.typeOf()}' while a number was expected.`,
       );
     }
     let rhsStrict = rhs.toStrict();
     if (!(rhsStrict instanceof NixInt || rhsStrict instanceof NixFloat)) {
       throw new EvalException(
-        `value is of type '${rhs.typeOf()}' while a number was expected.`
+        `value is of type '${rhs.typeOf()}' while a number was expected.`,
       );
     }
     return lhsStrict.add(rhsStrict);
@@ -1096,7 +1092,7 @@ function head(list: NixType): NixType {
   const listStrict = list.toStrict();
   if (!(listStrict instanceof NixList)) {
     throw new EvalException(
-      `Cannot apply the 'head' function on '${listStrict.typeOf()}'.`
+      `Cannot apply the 'head' function on '${listStrict.typeOf()}'.`,
     );
   }
   if (listStrict.values.length === 0) {
@@ -1109,7 +1105,7 @@ function head(list: NixType): NixType {
 export function paramLambda(
   ctx: EvalCtx,
   paramName: string,
-  body: Body
+  body: Body,
 ): Lambda {
   return new Lambda((param) => {
     let paramScope = new Map();
@@ -1122,18 +1118,16 @@ export function patternLambda(
   ctx: EvalCtx,
   argsBind: string | undefined,
   patterns: [[string, any]],
-  body: Body
+  body: Body,
 ): any {
   return new Lambda((param: Attrset) => {
     let paramScope = new Map();
     for (const [paramName, defaultValue] of patterns) {
-      // We are using `get` here instead of `_strictSelect` because we're adding the
-      // parameter to the function's scope. The parameter might be unused inside function.
       let paramValue = param.lookup(paramName);
       if (paramValue === undefined) {
         if (defaultValue === undefined) {
           throw new EvalException(
-            `Function called without required argument '${paramName}'.`
+            `Function called without required argument '${paramName}'.`,
           );
         }
         paramValue = defaultValue;
@@ -1212,7 +1206,7 @@ function normalizePath(path: string): string {
 function _attrPathToValue(
   ctx: EvalCtx,
   attrPath: NixType[],
-  value: NixType
+  value: NixType,
 ): undefined | NixType {
   if (attrPath.length === 0) {
     throw new EvalException("Unexpected attr path of zero length.");
@@ -1261,7 +1255,7 @@ function _buildGlobalScope() {
 export function withExpr(
   evalCtx: EvalCtx,
   namespace: Attrset,
-  body: Body
+  body: Body,
 ): any {
   return body(evalCtx.withNonShadowingScope(namespace));
 }
