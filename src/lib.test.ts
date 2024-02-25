@@ -679,7 +679,15 @@ test("'<' operator list invalid", () => {
   );
 });
 
-// TODO: '<' operator on other types: NixPath, Attrsets
+test("'<' operator on attrsets invalid", () => {
+  let smallAttrset = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
+  expect(() => smallAttrset.less(smallAttrset)).toThrow(n.EvalException);
+});
+
+test("'<' operator on paths", () => {
+  expect(new Path("./a").less(new Path("./b"))).toStrictEqual(n.TRUE);
+  expect(new Path("./a").less(new Path("./a"))).toStrictEqual(n.FALSE);
+});
 
 test("'<=' operator", () => {
   expect(new NixFloat(1).lessEq(new NixFloat(0))).toBe(n.FALSE);
