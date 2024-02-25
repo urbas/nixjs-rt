@@ -57,10 +57,7 @@ export class EvalCtx implements Scope {
     this.scriptDir = scriptDir;
     this.shadowScope =
       shadowScope === undefined ? _buildGlobalScope() : shadowScope;
-    // TODO: don't create a global scope for non-shadowing scope as there will
-    // be a shadowing global scope that will be hit first.
-    this.nonShadowScope =
-      nonShadowScope === undefined ? _buildGlobalScope() : nonShadowScope;
+    this.nonShadowScope = nonShadowScope;
   }
 
   withShadowingScope(lookupTable: Scope): EvalCtx {
@@ -81,9 +78,15 @@ export class EvalCtx implements Scope {
 
   lookup(name: string): NixType {
     let value = this.shadowScope.lookup(name);
-    if (value !== undefined) return value;
-    value = this.nonShadowScope.lookup(name);
-    if (value !== undefined) return value;
+    if (value !== undefined) {
+      return value;
+    }
+    if (this.nonShadowScope !== undefined) {
+      value = this.nonShadowScope.lookup(name);
+      if (value !== undefined) {
+        return value;
+      }
+    }
     throw new EvalException(`Could not find variable '${name}'.`);
   }
 }
@@ -156,7 +159,7 @@ export abstract class NixType {
    */
   less(rhs: NixType): NixBool {
     throw new EvalException(
-      `Cannot compare '${this.typeOf()}' with '${rhs.typeOf()}'.`,
+      `Cannot compare '${this.typeOf()}' with '${rhs.typeOf()}'; values of that type are incomparable`,
     );
   }
 
@@ -887,6 +890,14 @@ export class Path extends NixType {
       return new Path(normalizePath(this.path + rhs.value));
     }
     return this;
+  }
+
+  override less(rhs: NixType): NixBool {
+    rhs = rhs.toStrict();
+    if (!(rhs instanceof Path)) {
+      return super.less(rhs);
+    }
+    return _nixBoolFromJs(this.path < rhs.path);
   }
 
   toJs() {
