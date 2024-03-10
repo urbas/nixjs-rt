@@ -1120,7 +1120,7 @@ function all(pred: NixType): NixType {
   const lambdaStrict = pred.toStrict();
   if (!(lambdaStrict instanceof Lambda)) {
     throw new EvalException(
-      `'all' function requires a function as the first argument, but got '${lambdaStrict.typeOf()}' instead.`,
+      `'all' function requires another function, but got '${lambdaStrict.typeOf()}' instead.`,
     );
   }
 
@@ -1147,7 +1147,7 @@ function any(pred: NixType): NixType {
   const lambdaStrict = pred.toStrict();
   if (!(lambdaStrict instanceof Lambda)) {
     throw new EvalException(
-      `'any' function requires a function as the first argument, but got '${lambdaStrict.typeOf()}' instead.`,
+      `'any' function requires another function, but got '${lambdaStrict.typeOf()}' instead.`,
     );
   }
 
@@ -1188,7 +1188,7 @@ function attrValues(set: NixType): NixType {
   const listStrict = set.toStrict();
   if (!(listStrict instanceof Attrset)) {
     throw new EvalException(
-      `Cannot apply the 'attrNames' function on '${listStrict.typeOf()}'.`,
+      `Cannot apply the 'attrValues' function on '${listStrict.typeOf()}'.`,
     );
   }
 
