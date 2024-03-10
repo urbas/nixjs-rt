@@ -1170,32 +1170,34 @@ function any(pred: NixType): NixType {
   });
 }
 
-function attrNames(set: NixType): NixType {
-  const listStrict = set.toStrict();
-  if (!(listStrict instanceof Attrset)) {
+function attrNames(attrset: NixType): NixType {
+  const attrsetStrict = attrset.toStrict();
+  if (!(attrsetStrict instanceof Attrset)) {
     throw new EvalException(
-      `Cannot apply the 'attrNames' function on '${listStrict.typeOf()}'.`,
+      `Cannot apply the 'attrNames' function on '${attrsetStrict.typeOf()}'.`,
     );
   }
 
-  const keys = Array.from(listStrict.keys());
+  const keys = Array.from(attrsetStrict.keys());
   keys.sort();
 
   return new NixList(keys.map((key) => new NixString(key)));
 }
 
-function attrValues(set: NixType): NixType {
+function attrValues(attrset: NixType): NixType {
   const attrsetStrict = attrset.toStrict();
-  if (!(listStrict instanceof Attrset)) {
+  if (!(attrsetStrict instanceof Attrset)) {
     throw new EvalException(
-      `Cannot apply the 'attrValues' function on '${listStrict.typeOf()}'.`,
+      `Cannot apply the 'attrValues' function on '${attrsetStrict.typeOf()}'.`,
     );
   }
 
-  const keys = Array.from(listStrict.keys());
+  const keys = Array.from(attrsetStrict.keys());
   keys.sort();
 
-  return new NixList(keys.map((key) => set.select([new NixString(key)], NULL)));
+  return new NixList(
+    keys.map((key) => attrset.select([new NixString(key)], NULL)),
+  );
 }
 
 // Lambda:
