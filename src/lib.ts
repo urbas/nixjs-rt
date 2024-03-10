@@ -1185,7 +1185,7 @@ function attrNames(set: NixType): NixType {
 }
 
 function attrValues(set: NixType): NixType {
-  const listStrict = set.toStrict();
+  const attrsetStrict = attrset.toStrict();
   if (!(listStrict instanceof Attrset)) {
     throw new EvalException(
       `Cannot apply the 'attrValues' function on '${listStrict.typeOf()}'.`,
