@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from "@jest/globals";
 import n, {
+  Attrset,
   attrset,
   AttrsetBody,
   EMPTY_ATTRSET,
@@ -13,6 +14,7 @@ import n, {
   NixString,
   NixType,
   Path,
+  StrictAttrset,
 } from "./lib";
 
 let evalCtx: EvalCtx;
@@ -510,6 +512,108 @@ test("'builtins.head' throws when list is empty", () => {
 test("'builtins.head' on non-lists throws", () => {
   expect(() => getBuiltin("head").apply(new NixFloat(1))).toThrow(
     new EvalException("Cannot apply the 'head' function on 'float'."),
+  );
+});
+
+test("'builtins.any' on lists", () => {
+  expect(
+    getBuiltin("any")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(new NixList([n.FALSE, n.FALSE, n.TRUE])),
+  ).toBe(n.TRUE);
+  expect(
+    getBuiltin("any")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(new NixList([n.FALSE, n.FALSE, n.FALSE])),
+  ).toBe(n.FALSE);
+});
+
+test("'builtins.any' on non-function throws", () => {
+  expect(() => getBuiltin("any").apply(new NixFloat(1))).toThrow(
+    new EvalException(
+      "'any' function requires another function, but got 'float' instead.",
+    ),
+  );
+});
+
+test("'builtins.any' on non-list throws", () => {
+  expect(() =>
+    getBuiltin("any")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(n.TRUE),
+  ).toThrow(new EvalException("Cannot apply the 'any' function on 'bool'."));
+});
+
+test("'builtins.all' on lists", () => {
+  expect(
+    getBuiltin("all")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(new NixList([n.TRUE, n.TRUE, n.TRUE])),
+  ).toBe(n.TRUE);
+  expect(
+    getBuiltin("all")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(new NixList([n.TRUE, n.FALSE, n.TRUE])),
+  ).toBe(n.FALSE);
+});
+
+test("'builtins.all' on non-function throws", () => {
+  expect(() => getBuiltin("all").apply(new NixFloat(1))).toThrow(
+    new EvalException(
+      "'all' function requires another function, but got 'float' instead.",
+    ),
+  );
+});
+
+test("'builtins.all' on non-list throws", () => {
+  expect(() =>
+    getBuiltin("all")
+      .apply(new Lambda((ctx) => ctx))
+      .apply(n.TRUE),
+  ).toThrow(new EvalException("Cannot apply the 'all' function on 'bool'."));
+});
+
+test("'builtins.attrNames' on sets", () => {
+  expect(
+    getBuiltin("attrNames")
+      .apply(
+        new StrictAttrset(
+          new Map<string, NixType>([
+            ["b", n.FALSE],
+            ["a", n.TRUE],
+            ["c", new NixFloat(1)],
+          ]),
+        ),
+      )
+      .toJs(),
+  ).toStrictEqual(["a", "b", "c"]);
+});
+
+test("'builtins.attrNames' on non-sets throws", () => {
+  expect(() => getBuiltin("attrNames").apply(n.TRUE)).toThrow(
+    new EvalException("Cannot apply the 'attrNames' function on 'bool'."),
+  );
+});
+
+test("'builtins.attrValues' on sets", () => {
+  expect(
+    getBuiltin("attrValues")
+      .apply(
+        new StrictAttrset(
+          new Map<string, NixType>([
+            ["b", n.FALSE],
+            ["a", n.TRUE],
+            ["c", new NixFloat(1)],
+          ]),
+        ),
+      )
+      .toJs(),
+  ).toStrictEqual([true, false, 1]);
+});
+
+test("'builtins.attrValues' on non-sets throws", () => {
+  expect(() => getBuiltin("attrValues").apply(n.TRUE)).toThrow(
+    new EvalException("Cannot apply the 'attrValues' function on 'bool'."),
   );
 });
 
