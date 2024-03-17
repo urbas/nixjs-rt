@@ -2,7 +2,7 @@
   "name": "nixjs-rt",
   "version": "0.0.1",
   "description": "A library that implements Nix language semantics in JS.",
-  "main": "src/lib.js",
+  "main": "dist/lib.mjs",
   "scripts": {
     "build": "tsup ./src/lib.ts --format esm --sourcemap",
     "build-watch": "npm run build --watch",
@@ -30,7 +30,6 @@
     "typescript": "5.3.3"
   },
   "files": [
-    "dist/lib.js",
-    "src/lib.ts"
+    "dist/lib.mjs"
   ]
 }

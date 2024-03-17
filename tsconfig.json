@@ -8,5 +8,5 @@
     "esModuleInterop": true,
     "inlineSourceMap": true
   },
-  "include": ["src/lib.ts"]
+  "include": ["src/**/*.ts"]
 }
