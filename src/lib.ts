@@ -1,3 +1,5 @@
+import { getBuiltins } from "./builtins/builtins";
+
 // Types:
 export class EvalException extends Error {
   constructor(message: string) {
@@ -1066,138 +1068,15 @@ export function recAttrset(evalCtx: EvalCtx, entries: AttrsetBody): Attrset {
 
 // Builtins:
 function _createBuiltinsAttrset() {
+  const builtinsRecord = getBuiltins();
+
   const builtins = new Map();
 
-  builtins.set("abort", new Lambda(abort));
-  builtins.set("add", new Lambda(add));
-  builtins.set("head", new Lambda(head));
-  builtins.set("all", new Lambda(all));
-  builtins.set("any", new Lambda(any));
-  builtins.set("attrNames", new Lambda(attrNames));
-  builtins.set("attrValues", new Lambda(attrValues));
+  for (const [name, value] of Object.entries(builtinsRecord)) {
+    builtins.set(name, new Lambda(value));
+  }
 
   return new StrictAttrset(builtins);
-}
-
-function abort(message: NixType): NixType {
-  throw new EvalException(
-    `Evaluation aborted with the following error message: '${message.asString()}'`,
-  );
-}
-
-function add(lhs: NixType): Lambda {
-  return new Lambda((rhs) => {
-    let lhsStrict = lhs.toStrict();
-    if (!(lhsStrict instanceof NixInt || lhsStrict instanceof NixFloat)) {
-      throw new EvalException(
-        `value is of type '${lhs.typeOf()}' while a number was expected.`,
-      );
-    }
-    let rhsStrict = rhs.toStrict();
-    if (!(rhsStrict instanceof NixInt || rhsStrict instanceof NixFloat)) {
-      throw new EvalException(
-        `value is of type '${rhs.typeOf()}' while a number was expected.`,
-      );
-    }
-    return lhsStrict.add(rhsStrict);
-  });
-}
-
-function head(list: NixType): NixType {
-  const listStrict = list.toStrict();
-  if (!(listStrict instanceof NixList)) {
-    throw new EvalException(
-      `Cannot apply the 'head' function on '${listStrict.typeOf()}'.`,
-    );
-  }
-  if (listStrict.values.length === 0) {
-    throw new EvalException("Cannot fetch the first element in an empty list.");
-  }
-  return listStrict.values[0];
-}
-
-function all(pred: NixType): NixType {
-  const lambdaStrict = pred.toStrict();
-  if (!(lambdaStrict instanceof Lambda)) {
-    throw new EvalException(
-      `'all' function requires another function, but got '${lambdaStrict.typeOf()}' instead.`,
-    );
-  }
-
-  return new Lambda((list) => {
-    const listStrict = list.toStrict();
-    if (!(listStrict instanceof NixList)) {
-      throw new EvalException(
-        `Cannot apply the 'all' function on '${listStrict.typeOf()}'.`,
-      );
-    }
-
-    for (const element of listStrict.values) {
-      const result = lambdaStrict.apply(element);
-      if (!result.asBoolean()) {
-        return FALSE;
-      }
-    }
-
-    return TRUE;
-  });
-}
-
-function any(pred: NixType): NixType {
-  const lambdaStrict = pred.toStrict();
-  if (!(lambdaStrict instanceof Lambda)) {
-    throw new EvalException(
-      `'any' function requires another function, but got '${lambdaStrict.typeOf()}' instead.`,
-    );
-  }
-
-  return new Lambda((list) => {
-    const listStrict = list.toStrict();
-    if (!(listStrict instanceof NixList)) {
-      throw new EvalException(
-        `Cannot apply the 'any' function on '${listStrict.typeOf()}'.`,
-      );
-    }
-
-    for (const element of listStrict.values) {
-      const result = lambdaStrict.apply(element);
-      if (result.asBoolean()) {
-        return TRUE;
-      }
-    }
-
-    return FALSE;
-  });
-}
-
-function attrNames(attrset: NixType): NixType {
-  const attrsetStrict = attrset.toStrict();
-  if (!(attrsetStrict instanceof Attrset)) {
-    throw new EvalException(
-      `Cannot apply the 'attrNames' function on '${attrsetStrict.typeOf()}'.`,
-    );
-  }
-
-  const keys = Array.from(attrsetStrict.keys());
-  keys.sort();
-
-  return new NixList(keys.map((key) => new NixString(key)));
-}
-
-function attrValues(attrset: NixType): NixType {
-  const attrsetStrict = attrset.toStrict();
-  if (!(attrsetStrict instanceof Attrset)) {
-    throw new EvalException(
-      `Cannot apply the 'attrValues' function on '${attrsetStrict.typeOf()}'.`,
-    );
-  }
-
-  const keys = Array.from(attrsetStrict.keys());
-  keys.sort();
-
-  return new NixList(
-    keys.map((key) => attrset.select([new NixString(key)], NULL)),
-  );
 }
 
 // Lambda:
