@@ -16,12 +16,7 @@ import n, {
   Path,
   StrictAttrset,
 } from "./lib";
-
-let evalCtx: EvalCtx;
-
-beforeEach(() => {
-  evalCtx = testEvalCtx();
-});
+import { evalCtx, keyVals, toAttrpath } from "./testUtils";
 
 // Apply:
 test("calling a lambda should return its value", () => {
@@ -97,9 +92,9 @@ test("'+' operator on paths and strings", () => {
 
 test("'+' operator on paths", () => {
   expect(new Path("/").add(new Path("/a"))).toStrictEqual(new Path("/a"));
-  expect(n.toPath(evalCtx, "./a").add(n.toPath(evalCtx, "./b"))).toStrictEqual(
-    new Path("/test_base/a/test_base/b"),
-  );
+  expect(
+    n.toPath(evalCtx(), "./a").add(n.toPath(evalCtx(), "./b")),
+  ).toStrictEqual(new Path("/test_base/a/test_base/b"));
 });
 
 test("'-' operator on integers", () => {
@@ -186,39 +181,42 @@ test("'/' operator on non-numbers raises exceptions", () => {
 
 // Attrset:
 test("attrset construction", () => {
-  expect(attrset(evalCtx, keyVals()).toJs()).toStrictEqual(new Map());
+  expect(attrset(evalCtx(), keyVals()).toJs()).toStrictEqual(new Map());
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)])).toJs(),
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)])).toJs(),
   ).toStrictEqual(new Map([["a", 1]]));
   const nestedAttrset = new Map([["a", new Map([["b", 1]])]]);
   expect(
-    attrset(evalCtx, keyVals(["a.b", new NixFloat(1)])).toJs(),
+    attrset(evalCtx(), keyVals(["a.b", new NixFloat(1)])).toJs(),
   ).toStrictEqual(nestedAttrset);
   expect(
     attrset(
-      evalCtx,
-      keyVals(["a", attrset(evalCtx, keyVals())], ["a.b", new NixFloat(1)]),
+      evalCtx(),
+      keyVals(["a", attrset(evalCtx(), keyVals())], ["a.b", new NixFloat(1)]),
     ).toJs(),
   ).toStrictEqual(nestedAttrset);
   expect(
     attrset(
-      evalCtx,
-      keyVals(["x.a", attrset(evalCtx, keyVals())], ["x.a.b", new NixFloat(1)]),
+      evalCtx(),
+      keyVals(
+        ["x.a", attrset(evalCtx(), keyVals())],
+        ["x.a.b", new NixFloat(1)],
+      ),
     ).toJs(),
   ).toStrictEqual(new Map([["x", nestedAttrset]]));
 });
 
 test("attrsets ignore null attrs", () => {
   expect(
-    attrset(evalCtx, (_) => [
+    attrset(evalCtx(), (_) => [
       [[n.NULL, new NixString("a")], new NixFloat(1)],
     ]).toJs(),
   ).toStrictEqual(new Map());
   expect(
-    attrset(evalCtx, (_) => [[[n.NULL], new NixFloat(1)]]).toJs(),
+    attrset(evalCtx(), (_) => [[[n.NULL], new NixFloat(1)]]).toJs(),
   ).toStrictEqual(new Map());
   expect(
-    attrset(evalCtx, (_) => [
+    attrset(evalCtx(), (_) => [
       [[new NixString("a"), n.NULL], new NixFloat(1)],
     ]).toJs(),
   ).toStrictEqual(new Map([["a", new Map()]]));
@@ -227,27 +225,27 @@ test("attrsets ignore null attrs", () => {
 test("attrset construction with repeated attrs throws", () => {
   expect(() =>
     attrset(
-      evalCtx,
+      evalCtx(),
       keyVals(["a", new NixFloat(1)], ["a", new NixFloat(1)]),
     ).toJs(),
   ).toThrow(new EvalException("Attribute 'a' already defined."));
   expect(() =>
     attrset(
-      evalCtx,
+      evalCtx(),
       keyVals(["a", new NixFloat(1)], ["a.b", new NixFloat(2)]),
     ).toJs(),
   ).toThrow(new EvalException("Attribute 'a' already defined."));
   expect(() =>
     attrset(
-      evalCtx,
+      evalCtx(),
       keyVals(["a.b", new NixFloat(1)], ["a.b", new NixFloat(2)]),
     ).toJs(),
   ).toThrow(new EvalException("Attribute 'a.b' already defined."));
   expect(() =>
     attrset(
-      evalCtx,
+      evalCtx(),
       keyVals(
-        ["a.b", attrset(evalCtx, keyVals(["c", new NixFloat(1)]))],
+        ["a.b", attrset(evalCtx(), keyVals(["c", new NixFloat(1)]))],
         ["a.b.c", new NixFloat(2)],
       ),
     ).toJs(),
@@ -256,22 +254,22 @@ test("attrset construction with repeated attrs throws", () => {
 
 test("attrset with non-string attrs throw", () => {
   expect(() =>
-    attrset(evalCtx, (_) => [[[new NixFloat(1)], new NixFloat(1)]]).toJs(),
+    attrset(evalCtx(), (_) => [[[new NixFloat(1)], new NixFloat(1)]]).toJs(),
   ).toThrow(n.EvalException);
 });
 
 test("'//' operator on attrsets", () => {
   expect(
-    attrset(evalCtx, keyVals()).update(attrset(evalCtx, keyVals())).toJs(),
+    attrset(evalCtx(), keyVals()).update(attrset(evalCtx(), keyVals())).toJs(),
   ).toStrictEqual(new Map());
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)]))
-      .update(attrset(evalCtx, keyVals()))
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)]))
+      .update(attrset(evalCtx(), keyVals()))
       .toJs(),
   ).toStrictEqual(new Map([["a", 1]]));
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)]))
-      .update(attrset(evalCtx, keyVals(["b", new NixFloat(2)])))
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)]))
+      .update(attrset(evalCtx(), keyVals(["b", new NixFloat(2)])))
       .toJs(),
   ).toStrictEqual(
     new Map([
@@ -280,34 +278,36 @@ test("'//' operator on attrsets", () => {
     ]),
   );
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)]))
-      .update(attrset(evalCtx, keyVals(["a", new NixFloat(2)])))
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)]))
+      .update(attrset(evalCtx(), keyVals(["a", new NixFloat(2)])))
       .toJs(),
   ).toStrictEqual(new Map([["a", 2]]));
 });
 
 test("'//' operator on non-attrsets raises exceptions", () => {
-  expect(() => attrset(evalCtx, keyVals()).update(new NixFloat(1))).toThrow(
+  expect(() => attrset(evalCtx(), keyVals()).update(new NixFloat(1))).toThrow(
     n.EvalException,
   );
-  expect(() => new NixFloat(1).update(attrset(evalCtx, keyVals()))).toThrow(
+  expect(() => new NixFloat(1).update(attrset(evalCtx(), keyVals()))).toThrow(
     n.EvalException,
   );
 });
 
 test("'?' operator", () => {
-  expect(attrset(evalCtx, keyVals()).has([new NixString("a")])).toBe(n.FALSE);
+  expect(attrset(evalCtx(), keyVals()).has([new NixString("a")])).toBe(n.FALSE);
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)])).has([new NixString("a")]),
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)])).has([
+      new NixString("a"),
+    ]),
   ).toBe(n.TRUE);
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)])).has([
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)])).has([
       new NixString("a"),
       new NixString("b"),
     ]),
   ).toBe(n.FALSE);
   expect(
-    attrset(evalCtx, keyVals(["a.b", new NixFloat(-1)])).has([
+    attrset(evalCtx(), keyVals(["a.b", new NixFloat(-1)])).has([
       new NixString("a"),
       new NixString("b"),
     ]),
@@ -321,28 +321,28 @@ test("'?' operator on other types returns false", () => {
 
 test("'.' operator", () => {
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)]))
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)]))
       .select([new NixString("a")], undefined)
       .toJs(),
   ).toBe(1);
 
   expect(
-    attrset(evalCtx, keyVals(["a.b", new NixFloat(1)]))
+    attrset(evalCtx(), keyVals(["a.b", new NixFloat(1)]))
       .select([new NixString("a"), new NixString("b")], undefined)
       .toJs(),
   ).toBe(1);
   expect(
-    attrset(evalCtx, keyVals()).select([new NixString("a")], new NixFloat(1)),
+    attrset(evalCtx(), keyVals()).select([new NixString("a")], new NixFloat(1)),
   ).toStrictEqual(new NixFloat(1));
   expect(
-    attrset(evalCtx, keyVals(["a.a", new NixFloat(1)]))
+    attrset(evalCtx(), keyVals(["a.a", new NixFloat(1)]))
       .select([new NixString("a"), new NixString("b")], new NixFloat(1))
       .toJs(),
   ).toBe(1);
   expect(
     n
       .attrset(
-        evalCtx,
+        evalCtx(),
         keyVals(["a", new NixFloat(1)], ["b.c", new NixFloat(2)]),
       )
       .select([new NixString("a"), new NixString("c")], new NixFloat(5))
@@ -352,14 +352,14 @@ test("'.' operator", () => {
 
 test("'.' operator throws when attrpath doesn't exist", () => {
   expect(() =>
-    attrset(evalCtx, keyVals()).select([new NixString("a")], undefined),
+    attrset(evalCtx(), keyVals()).select([new NixString("a")], undefined),
   ).toThrow(n.EvalException);
 });
 
 test("recursive attrsets allow referencing attributes defined later", () => {
   expect(
     n
-      .recAttrset(evalCtx, (ctx) => [
+      .recAttrset(evalCtx(), (ctx) => [
         [
           toAttrpath("a"),
           new Lazy(ctx, (ctx) => ctx.lookup("b").add(new NixFloat(1))),
@@ -374,7 +374,7 @@ test("recursive attrsets allow referencing attributes defined later", () => {
 test("recursive attrsets allow referencing attributes from other attribute names", () => {
   expect(
     n
-      .recAttrset(evalCtx, (ctx) => [
+      .recAttrset(evalCtx(), (ctx) => [
         [[new Lazy(ctx, (ctx) => ctx.lookup("a"))], new NixFloat(1)],
         [[new NixString("a")], new NixString("b")],
       ])
@@ -388,7 +388,7 @@ test("recursive attrsets allow referencing attributes from other attribute names
   // This fails in nix but work with our implementation: `rec { ${a} = 1; ${b} = "c"; b = "a"; }`
   expect(
     n
-      .recAttrset(evalCtx, (ctx) => [
+      .recAttrset(evalCtx(), (ctx) => [
         [[new Lazy(ctx, (ctx) => ctx.lookup("a"))], new NixFloat(1)],
         [[new Lazy(ctx, (ctx) => ctx.lookup("b"))], new NixString("c")],
         [[new NixString("b")], new NixString("a")],
@@ -406,7 +406,7 @@ test("recursive attrsets allow referencing attributes from other attribute names
 test("non-recursive attrsets don't allow references to other attributes in the attrset", () => {
   expect(() =>
     n
-      .attrset(evalCtx, (ctx) => [
+      .attrset(evalCtx(), (ctx) => [
         [toAttrpath("a"), ctx.lookup("b").add(new NixFloat(1))],
         [toAttrpath("b"), new NixFloat(1)],
       ])
@@ -452,169 +452,6 @@ test("'||' operator on booleans", () => {
 test("'||' operator on non-booleans raises exceptions", () => {
   expect(() => n.FALSE.or(new NixFloat(1))).toThrow(n.EvalException);
   expect(() => new NixFloat(1).or(n.TRUE)).toThrow(n.EvalException);
-});
-
-// Builtins:
-test("'builtins.abort' throws with the given message", () => {
-  expect(() => getBuiltin("abort").apply(new NixString("foo"))).toThrow(
-    new EvalException(
-      "Evaluation aborted with the following error message: 'foo'",
-    ),
-  );
-  // `abort` is special, since it's available directly on the global scope
-  expect(() => evalCtx.lookup("abort").apply(new NixString("foo"))).toThrow(
-    new EvalException(
-      "Evaluation aborted with the following error message: 'foo'",
-    ),
-  );
-});
-
-test("'builtins.abort' on a non-string throws during coercion", () => {
-  expect(() => getBuiltin("abort").apply(new NixFloat(1))).toThrow(
-    new EvalException("Value is 'float' but a string was expected."),
-  );
-});
-
-test("'builtins.add' adds two numbers", () => {
-  expect(
-    getBuiltin("add").apply(new NixInt(1n)).apply(new NixInt(2n)),
-  ).toStrictEqual(new NixInt(3n));
-  expect(
-    getBuiltin("add").apply(new NixFloat(1)).apply(new NixFloat(2)),
-  ).toStrictEqual(new NixFloat(3));
-});
-
-test("'builtins.add' throws when trying to add two strings", () => {
-  expect(() =>
-    getBuiltin("add").apply(new NixString("a")).apply(new NixString("b")),
-  ).toThrow(
-    new EvalException("value is of type 'string' while a number was expected."),
-  );
-  expect(() =>
-    getBuiltin("add").apply(new NixFloat(1)).apply(new NixString("b")),
-  ).toThrow(
-    new EvalException("value is of type 'string' while a number was expected."),
-  );
-});
-
-test("'builtins.head' on lists", () => {
-  expect(
-    getBuiltin("head").apply(new NixList([new NixFloat(1), new NixFloat(2)])),
-  ).toStrictEqual(new NixFloat(1));
-});
-
-test("'builtins.head' throws when list is empty", () => {
-  expect(() => getBuiltin("head").apply(new NixList([]))).toThrow(
-    new EvalException("Cannot fetch the first element in an empty list."),
-  );
-});
-
-test("'builtins.head' on non-lists throws", () => {
-  expect(() => getBuiltin("head").apply(new NixFloat(1))).toThrow(
-    new EvalException("Cannot apply the 'head' function on 'float'."),
-  );
-});
-
-test("'builtins.any' on lists", () => {
-  expect(
-    getBuiltin("any")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(new NixList([n.FALSE, n.FALSE, n.TRUE])),
-  ).toBe(n.TRUE);
-  expect(
-    getBuiltin("any")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(new NixList([n.FALSE, n.FALSE, n.FALSE])),
-  ).toBe(n.FALSE);
-});
-
-test("'builtins.any' on non-function throws", () => {
-  expect(() => getBuiltin("any").apply(new NixFloat(1))).toThrow(
-    new EvalException(
-      "'any' function requires another function, but got 'float' instead.",
-    ),
-  );
-});
-
-test("'builtins.any' on non-list throws", () => {
-  expect(() =>
-    getBuiltin("any")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(n.TRUE),
-  ).toThrow(new EvalException("Cannot apply the 'any' function on 'bool'."));
-});
-
-test("'builtins.all' on lists", () => {
-  expect(
-    getBuiltin("all")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(new NixList([n.TRUE, n.TRUE, n.TRUE])),
-  ).toBe(n.TRUE);
-  expect(
-    getBuiltin("all")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(new NixList([n.TRUE, n.FALSE, n.TRUE])),
-  ).toBe(n.FALSE);
-});
-
-test("'builtins.all' on non-function throws", () => {
-  expect(() => getBuiltin("all").apply(new NixFloat(1))).toThrow(
-    new EvalException(
-      "'all' function requires another function, but got 'float' instead.",
-    ),
-  );
-});
-
-test("'builtins.all' on non-list throws", () => {
-  expect(() =>
-    getBuiltin("all")
-      .apply(new Lambda((ctx) => ctx))
-      .apply(n.TRUE),
-  ).toThrow(new EvalException("Cannot apply the 'all' function on 'bool'."));
-});
-
-test("'builtins.attrNames' on sets", () => {
-  expect(
-    getBuiltin("attrNames")
-      .apply(
-        new StrictAttrset(
-          new Map<string, NixType>([
-            ["b", n.FALSE],
-            ["a", n.TRUE],
-            ["c", new NixFloat(1)],
-          ]),
-        ),
-      )
-      .toJs(),
-  ).toStrictEqual(["a", "b", "c"]);
-});
-
-test("'builtins.attrNames' on non-sets throws", () => {
-  expect(() => getBuiltin("attrNames").apply(n.TRUE)).toThrow(
-    new EvalException("Cannot apply the 'attrNames' function on 'bool'."),
-  );
-});
-
-test("'builtins.attrValues' on sets", () => {
-  expect(
-    getBuiltin("attrValues")
-      .apply(
-        new StrictAttrset(
-          new Map<string, NixType>([
-            ["b", n.FALSE],
-            ["a", n.TRUE],
-            ["c", new NixFloat(1)],
-          ]),
-        ),
-      )
-      .toJs(),
-  ).toStrictEqual([true, false, 1]);
-});
-
-test("'builtins.attrValues' on non-sets throws", () => {
-  expect(() => getBuiltin("attrValues").apply(n.TRUE)).toThrow(
-    new EvalException("Cannot apply the 'attrValues' function on 'bool'."),
-  );
 });
 
 // Comparison:
@@ -666,22 +503,22 @@ test("'==' operator on nulls", () => {
 });
 
 test("'==' operator on attrsets", () => {
-  expect(attrset(evalCtx, keyVals()).eq(attrset(evalCtx, keyVals()))).toBe(
+  expect(attrset(evalCtx(), keyVals()).eq(attrset(evalCtx(), keyVals()))).toBe(
     n.TRUE,
   );
   expect(
-    attrset(evalCtx, keyVals()).eq(
-      attrset(evalCtx, keyVals(["a", new NixFloat(1)])),
+    attrset(evalCtx(), keyVals()).eq(
+      attrset(evalCtx(), keyVals(["a", new NixFloat(1)])),
     ),
   ).toBe(n.FALSE);
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)])).eq(
-      attrset(evalCtx, keyVals(["a", new NixFloat(1)])),
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)])).eq(
+      attrset(evalCtx(), keyVals(["a", new NixFloat(1)])),
     ),
   ).toBe(n.TRUE);
   expect(
-    attrset(evalCtx, keyVals(["a", new NixFloat(1)])).eq(
-      attrset(evalCtx, keyVals(["a", new NixFloat(2)])),
+    attrset(evalCtx(), keyVals(["a", new NixFloat(1)])).eq(
+      attrset(evalCtx(), keyVals(["a", new NixFloat(2)])),
     ),
   ).toBe(n.FALSE);
 });
@@ -756,20 +593,20 @@ test("'<' operator on lists", () => {
 
 test("'<' operator on lists with lazy values", () => {
   expect(
-    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))]).less(
-      new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))]),
+    new NixList([new Lazy(evalCtx(), (_) => new NixFloat(1))]).less(
+      new NixList([new Lazy(evalCtx(), (_) => new NixFloat(1))]),
     ),
   ).toBe(n.FALSE);
 
   expect(
-    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))]).less(
-      new NixList([new Lazy(evalCtx, (_) => new NixFloat(2))]),
+    new NixList([new Lazy(evalCtx(), (_) => new NixFloat(1))]).less(
+      new NixList([new Lazy(evalCtx(), (_) => new NixFloat(2))]),
     ),
   ).toBe(n.TRUE);
 
   expect(
-    new NixList([new Lazy(evalCtx, (_) => n.TRUE)]).less(
-      new NixList([new Lazy(evalCtx, (_) => n.TRUE)]),
+    new NixList([new Lazy(evalCtx(), (_) => n.TRUE)]).less(
+      new NixList([new Lazy(evalCtx(), (_) => n.TRUE)]),
     ),
   ).toBe(n.FALSE);
 });
@@ -784,7 +621,7 @@ test("'<' operator list invalid", () => {
 });
 
 test("'<' operator on attrsets invalid", () => {
-  let smallAttrset = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
+  let smallAttrset = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
   expect(() => smallAttrset.less(smallAttrset)).toThrow(n.EvalException);
 });
 
@@ -823,16 +660,16 @@ test("'>' operator", () => {
 test("parameter lambda", () => {
   expect(
     n
-      .paramLambda(evalCtx, "foo", (evalCtx) => evalCtx.lookup("foo"))
+      .paramLambda(evalCtx(), "foo", (evalCtx) => evalCtx.lookup("foo"))
       .apply(n.TRUE),
   ).toBe(n.TRUE);
 });
 
 test("pattern lambda", () => {
-  const arg = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
+  const arg = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
   expect(
     n
-      .patternLambda(evalCtx, undefined, [["a", undefined]], (evalCtx) =>
+      .patternLambda(evalCtx(), undefined, [["a", undefined]], (evalCtx) =>
         evalCtx.lookup("a"),
       )
       .apply(arg)
@@ -841,10 +678,10 @@ test("pattern lambda", () => {
 });
 
 test("pattern lambda with default values", () => {
-  const arg = n.attrset(evalCtx, keyVals());
+  const arg = n.attrset(evalCtx(), keyVals());
   expect(
     n
-      .patternLambda(evalCtx, undefined, [["a", 1]], (evalCtx) =>
+      .patternLambda(evalCtx(), undefined, [["a", 1]], (evalCtx) =>
         evalCtx.lookup("a"),
       )
       .apply(arg),
@@ -852,23 +689,23 @@ test("pattern lambda with default values", () => {
 });
 
 test("pattern lambda with missing parameter", () => {
-  let innerCtx = evalCtx.withShadowingScope(
-    n.attrset(evalCtx, keyVals(["a", new NixFloat(1)])),
+  let innerCtx = evalCtx().withShadowingScope(
+    n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)])),
   );
   expect(() =>
     n
       .patternLambda(innerCtx, undefined, [["a", undefined]], (evalCtx) =>
         evalCtx.lookup("a"),
       )
-      .apply(n.attrset(evalCtx, keyVals())),
+      .apply(n.attrset(evalCtx(), keyVals())),
   ).toThrow(n.EvalException);
 });
 
 test("pattern lambda with arguments binding", () => {
-  const arg = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
+  const arg = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
   expect(
     n
-      .patternLambda(evalCtx, "args", [["a", undefined]], (evalCtx) =>
+      .patternLambda(evalCtx(), "args", [["a", undefined]], (evalCtx) =>
         evalCtx.lookup("args").select([new NixString("a")], undefined),
       )
       .apply(arg)
@@ -879,7 +716,7 @@ test("pattern lambda with arguments binding", () => {
 // Lazy:
 test("'Lazy.toStrict' evaluates the body only once", () => {
   let sentinel = new NixFloat(0);
-  let lazyValue = new Lazy(evalCtx, (_) => {
+  let lazyValue = new Lazy(evalCtx(), (_) => {
     sentinel = sentinel.add(new NixFloat(1)) as NixFloat;
     return sentinel;
   });
@@ -889,15 +726,15 @@ test("'Lazy.toStrict' evaluates the body only once", () => {
 
 test("'Lazy.toStrict' uses the construction-time evaluation context", () => {
   const innerValue = new NixFloat(42);
-  let innerCtx = evalCtx.withShadowingScope(
-    n.attrset(evalCtx, keyVals(["a", innerValue])),
+  let innerCtx = evalCtx().withShadowingScope(
+    n.attrset(evalCtx(), keyVals(["a", innerValue])),
   );
   let lazyValue = new Lazy(innerCtx, (evalCtx) => evalCtx.lookup("a"));
   expect(lazyValue.toStrict()).toEqual(innerValue);
 });
 
 test("'Lazy.toStrict' drops the body and the evaluation context", () => {
-  let lazyValue = new Lazy(evalCtx, (_) => n.TRUE);
+  let lazyValue = new Lazy(evalCtx(), (_) => n.TRUE);
   lazyValue.toStrict();
   expect(lazyValue.body).toBeUndefined();
   expect(lazyValue.evalCtx).toBeUndefined();
@@ -917,11 +754,11 @@ test("'++' operator", () => {
 
 test("'++' operator on lazy lists with lazy values", () => {
   expect(
-    new NixList([new Lazy(evalCtx, (_) => new NixFloat(1))])
+    new NixList([new Lazy(evalCtx(), (_) => new NixFloat(1))])
       .concat(
         new Lazy(
-          evalCtx,
-          (_) => new NixList([new Lazy(evalCtx, (_) => new NixFloat(2))]),
+          evalCtx(),
+          (_) => new NixList([new Lazy(evalCtx(), (_) => new NixFloat(2))]),
         ),
       )
       .toJs(),
@@ -937,25 +774,25 @@ test("'++' operator on non-lists raises exceptions", () => {
 
 // Path:
 test("toPath on absolute paths", () => {
-  expect(n.toPath(evalCtx, "/a")).toStrictEqual(new Path("/a"));
-  expect(n.toPath(evalCtx, "/./a/../b")).toStrictEqual(new Path("/b"));
-  expect(n.toPath(evalCtx, "//./a//..///b/")).toStrictEqual(new Path("/b"));
+  expect(n.toPath(evalCtx(), "/a")).toStrictEqual(new Path("/a"));
+  expect(n.toPath(evalCtx(), "/./a/../b")).toStrictEqual(new Path("/b"));
+  expect(n.toPath(evalCtx(), "//./a//..///b/")).toStrictEqual(new Path("/b"));
 });
 
 test("toPath transforms relative paths with 'joinPaths'", () => {
-  expect(n.toPath(evalCtx, "a")).toStrictEqual(new Path("/test_base/a"));
-  expect(n.toPath(evalCtx, "./a")).toStrictEqual(new Path("/test_base/a"));
+  expect(n.toPath(evalCtx(), "a")).toStrictEqual(new Path("/test_base/a"));
+  expect(n.toPath(evalCtx(), "./a")).toStrictEqual(new Path("/test_base/a"));
 });
 
 // Scope:
 test("variable not in global scope", () => {
-  expect(() => evalCtx.lookup("foo")).toThrow(n.EvalException);
+  expect(() => evalCtx().lookup("foo")).toThrow(n.EvalException);
 });
 
 test("variable in shadowing scope", () => {
   expect(
-    evalCtx
-      .withShadowingScope(n.attrset(evalCtx, keyVals(["foo", n.TRUE])))
+    evalCtx()
+      .withShadowingScope(n.attrset(evalCtx(), keyVals(["foo", n.TRUE])))
       .lookup("foo")
       .toJs(),
   ).toBe(true);
@@ -969,7 +806,7 @@ test("typeOf", () => {
   expect(n.TRUE.typeOf()).toBe("bool");
   expect(n.NULL.typeOf()).toBe("null");
   expect(new NixList([]).typeOf()).toBe("list");
-  expect(attrset(evalCtx, keyVals()).typeOf()).toBe("set");
+  expect(attrset(evalCtx(), keyVals()).typeOf()).toBe("set");
   expect(new Path("/").typeOf()).toBe("path");
   expect(new Lambda((_) => n.TRUE).typeOf()).toBe("lambda");
   // TODO: cover other Nix types
@@ -977,16 +814,16 @@ test("typeOf", () => {
 
 // With:
 test("'with' expression puts attrs into scope", () => {
-  const namespace = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
+  const namespace = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
   expect(
-    n.withExpr(evalCtx, namespace, (evalCtx) => evalCtx.lookup("a")).toJs(),
+    n.withExpr(evalCtx(), namespace, (evalCtx) => evalCtx.lookup("a")).toJs(),
   ).toBe(1);
 });
 
 test("'with' expression does not shadow variables", () => {
-  const namespace = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
-  let outerCtx = evalCtx.withShadowingScope(
-    n.attrset(evalCtx, keyVals(["a", new NixFloat(2)])),
+  const namespace = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
+  let outerCtx = evalCtx().withShadowingScope(
+    n.attrset(evalCtx(), keyVals(["a", new NixFloat(2)])),
   );
   expect(n.withExpr(outerCtx, namespace, (ctx) => ctx.lookup("a")).toJs()).toBe(
     2,
@@ -994,30 +831,9 @@ test("'with' expression does not shadow variables", () => {
 });
 
 test("'with' expressions shadow themselves", () => {
-  const outerNamespace = n.attrset(evalCtx, keyVals(["a", new NixFloat(1)]));
-  const innerNamespace = n.attrset(evalCtx, keyVals(["a", new NixFloat(2)]));
+  const outerNamespace = n.attrset(evalCtx(), keyVals(["a", new NixFloat(1)]));
+  const innerNamespace = n.attrset(evalCtx(), keyVals(["a", new NixFloat(2)]));
   const innerExpr = (ctx) =>
     n.withExpr(ctx, innerNamespace, (ctx) => ctx.lookup("a"));
-  expect(n.withExpr(evalCtx, outerNamespace, innerExpr).toJs()).toBe(2);
+  expect(n.withExpr(evalCtx(), outerNamespace, innerExpr).toJs()).toBe(2);
 });
-
-// Helpers:
-function testEvalCtx() {
-  return new EvalCtx("/test_base");
-}
-
-function keyVals(
-  ...entries: [attrpathStr: string, value: NixType][]
-): AttrsetBody {
-  return (_ctx) => entries.map((entry) => [toAttrpath(entry[0]), entry[1]]);
-}
-
-function toAttrpath(attrPathStr: string): NixType[] {
-  return attrPathStr.split(".").map((val) => new NixString(val) as NixType);
-}
-
-function getBuiltin(builtinName: string): NixType {
-  return evalCtx
-    .lookup("builtins")
-    .select([new NixString(builtinName)], undefined);
-}

@@ -12,5 +12,5 @@ function expectFile() {
     || ( echo "❌ Could not find the file '$theFile'." && exit 1 )
 }
 
-expectFile $outLink/lib/node_modules/nixjs-rt/src/lib.ts
-expectFile $outLink/lib/node_modules/nixjs-rt/dist/lib.js
+expectFile $outLink/lib/node_modules/nixjs-rt/dist/lib.mjs
+expectFile $outLink/lib/node_modules/nixjs-rt/dist/lib.mjs.map
